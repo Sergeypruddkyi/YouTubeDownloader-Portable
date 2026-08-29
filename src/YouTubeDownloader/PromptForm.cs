@@ -16,6 +16,7 @@ namespace YouTubeDownloader
             MaximizeBox = false;
             StartPosition = FormStartPosition.CenterParent;
             ShowInTaskbar = false;
+            BackColor = Theme.Back;
             ClientSize = new Size(470, 150);
             Font = new Font("Segoe UI", 9F);
 
@@ -23,6 +24,7 @@ namespace YouTubeDownloader
             lbl.Text = message;
             lbl.Location = new Point(14, 12);
             lbl.Size = new Size(442, 84);
+            lbl.ForeColor = warning ? Theme.Red : Theme.Light;
             Controls.Add(lbl);
 
             int x = 470 - 14;
@@ -35,12 +37,11 @@ namespace YouTubeDownloader
                 x -= btn.Width;
                 if (i < buttons.Length - 1) x -= 8;
                 btn.Location = new Point(x, 108);
+                Theme.StyleButton(btn);
                 string chosen = b;
                 btn.Click += delegate { Chosen = chosen; Close(); };
                 Controls.Add(btn);
             }
-
-            if (warning) lbl.ForeColor = Color.FromArgb(150, 40, 40);
         }
 
         public static string Show(Form owner, string title, string message, bool warning, params string[] buttons)

@@ -2,6 +2,8 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using System.Windows.Forms;
 
 namespace YouTubeDownloader
 {
@@ -59,6 +61,7 @@ namespace YouTubeDownloader
 
             TestSettings();
             TestUrlValidator();
+            TestQuoting();
             TestClassifier();
             TestInvalidUrlRun();
 
@@ -70,19 +73,59 @@ namespace YouTubeDownloader
             return _fail == 0 ? 0 : 1;
         }
 
+        public static int RunClipboard(string expected)
+        {
+            TryAttachConsole();
+            string url = null;
+            string err = null;
+            Thread t = new Thread(new ThreadStart(delegate
+            {
+                try
+                {
+                    string text = Clipboard.GetText();
+                    url = YouTubeUrl.ExtractFirst(text);
+                }
+                catch (Exception ex) { err = ex.Message; }
+            }));
+            t.SetApartmentState(ApartmentState.STA);
+            t.Start();
+            t.Join(5000);
+            if (err != null)
+            {
+                Line("[FAIL] Clipboard: " + err);
+                WriteResultFile(Buf.ToString());
+                return 1;
+            }
+            Line("CLIPBOARD_URL=" + (url ?? "<null>"));
+            bool ok = url != null && (expected == null || string.Equals(url, expected, StringComparison.OrdinalIgnoreCase));
+            Check("Clipboard → URL", ok, null);
+            WriteResultFile(Buf.ToString());
+            return ok ? 0 : 1;
+        }
+
+        public static int RunTitle(string url)
+        {
+            TryAttachConsole();
+            string title;
+            bool ok = YtDlpRunner.TryGetTitle(url, out title);
+            Line("TITLE=" + (title ?? "<null>"));
+            Check("Получение названия видео", ok, url);
+            WriteResultFile(Buf.ToString());
+            return ok ? 0 : 1;
+        }
+
         private static void TestSettings()
         {
             try
             {
-                string testPath = Path.Combine(AppPaths.BaseDir, "settings.ini");
-                Settings st = new Settings(testPath);
+                Settings st = new Settings(AppPaths.SettingsPath);
                 st.LastFolder = "C:\\__selftest__";
                 st.Save();
-                Settings st2 = new Settings(testPath);
+                Settings st2 = new Settings(AppPaths.SettingsPath);
                 st2.Load();
                 bool ok = string.Equals(st2.LastFolder, "C:\\__selftest__", StringComparison.Ordinal);
-                Check("settings.ini запись/чтение", ok, testPath);
-                try { File.Delete(testPath); }
+                Check("settings.ini запись/чтение", ok, AppPaths.SettingsPath);
+                try { File.Delete(AppPaths.SettingsPath); }
                 catch { }
             }
             catch (Exception ex)
@@ -101,8 +144,23 @@ namespace YouTubeDownloader
                 YouTubeUrl.IsValid("youtube.com/watch?v=dQw4w9WgXcQ") &&
                 !YouTubeUrl.IsValid("https://www.google.com/search?q=youtube") &&
                 !YouTubeUrl.IsValid("") &&
+                !YouTubeUrl.IsValid("https://youtu.be/dQw4w9WgXcQ\ta=b") &&
+                !YouTubeUrl.IsValid("https://youtu.be/dQw4w9WgXcQ\"x") &&
+                !YouTubeUrl.IsValid("https://youtu.be\\dQw4w9WgXcQ") &&
                 string.Equals(YouTubeUrl.ExtractFirst("Смотри: https://youtu.be/dQw4w9WgXcQ?si=x (классика)"), "https://youtu.be/dQw4w9WgXcQ?si=x", StringComparison.Ordinal);
             Check("Валидатор YouTube-ссылок", ok, null);
+        }
+
+        private static void TestQuoting()
+        {
+            bool ok =
+                string.Equals(YtDlpRunner.Quote("abc"), "abc", StringComparison.Ordinal) &&
+                string.Equals(YtDlpRunner.Quote("a b"), "\"a b\"", StringComparison.Ordinal) &&
+                string.Equals(YtDlpRunner.Quote("a\"b"), "\"a\\\"b\"", StringComparison.Ordinal) &&
+                string.Equals(YtDlpRunner.Quote("a\\"), "a\\", StringComparison.Ordinal) &&
+                string.Equals(YtDlpRunner.Quote("a\tb"), "\"a\tb\"", StringComparison.Ordinal) &&
+                string.Equals(YtDlpRunner.Quote(""), "\"\"", StringComparison.Ordinal);
+            Check("Кавычкирование аргументов (Windows argv)", ok, null);
         }
 
         private static void TestClassifier()

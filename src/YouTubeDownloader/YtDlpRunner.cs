@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Globalization;
-using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -11,7 +10,6 @@ namespace YouTubeDownloader
     public class YtLine
     {
         public string Text;
-        public bool IsError;
     }
 
     public class YtRunResult
@@ -81,9 +79,47 @@ namespace YouTubeDownloader
     {
         public static string Quote(string arg)
         {
-            if (string.IsNullOrEmpty(arg)) return "\"\"";
-            bool need = arg.Contains(" ") || arg.Contains("\"");
-            return need ? "\"" + arg.Replace("\"", "\\\"") + "\"" : arg;
+            if (arg == null) arg = "";
+            bool need = arg.Length == 0;
+            foreach (char ch in arg)
+            {
+                if (ch <= ' ' || ch == '"')
+                {
+                    need = true;
+                    break;
+                }
+            }
+            if (!need) return arg;
+
+            StringBuilder sb = new StringBuilder();
+            sb.Append('"');
+            int backslashes = 0;
+            foreach (char ch in arg)
+            {
+                if (ch == '\\')
+                {
+                    backslashes++;
+                    continue;
+                }
+                if (ch == '"')
+                {
+                    sb.Append('\\', backslashes * 2 + 1);
+                    sb.Append('"');
+                    backslashes = 0;
+                }
+                else
+                {
+                    if (backslashes > 0)
+                    {
+                        sb.Append('\\', backslashes);
+                        backslashes = 0;
+                    }
+                    sb.Append(ch);
+                }
+            }
+            if (backslashes > 0) sb.Append('\\', backslashes * 2);
+            sb.Append('"');
+            return sb.ToString();
         }
 
         public static string FormatArgs(string[] args)
@@ -95,6 +131,22 @@ namespace YouTubeDownloader
                 sb.Append(Quote(a));
             }
             return sb.ToString();
+        }
+
+        private static ProcessStartInfo BuildStartInfo(string arguments)
+        {
+            ProcessStartInfo psi = new ProcessStartInfo();
+            psi.FileName = AppPaths.YtExe;
+            psi.Arguments = arguments;
+            psi.WorkingDirectory = AppPaths.BaseDir;
+            psi.UseShellExecute = false;
+            psi.CreateNoWindow = true;
+            psi.RedirectStandardOutput = true;
+            psi.RedirectStandardError = true;
+            psi.StandardOutputEncoding = new UTF8Encoding(false);
+            psi.StandardErrorEncoding = new UTF8Encoding(false);
+            psi.EnvironmentVariables["PATH"] = AppPaths.BaseDir.TrimEnd('\\') + ";" + (Environment.GetEnvironmentVariable("PATH") ?? "");
+            return psi;
         }
 
         public static string[] DownloadArgs(string folder, string url)
@@ -124,20 +176,8 @@ namespace YouTubeDownloader
 
         public static Task<YtRunResult> RunAsync(string[] args, Action<YtLine> onLine, Action<Process> onStarted)
         {
-            ProcessStartInfo psi = new ProcessStartInfo();
-            psi.FileName = AppPaths.YtExe;
-            psi.Arguments = FormatArgs(args);
-            psi.WorkingDirectory = AppPaths.BaseDir;
-            psi.UseShellExecute = false;
-            psi.CreateNoWindow = true;
-            psi.RedirectStandardOutput = true;
-            psi.RedirectStandardError = true;
-            psi.StandardOutputEncoding = new UTF8Encoding(false);
-            psi.StandardErrorEncoding = new UTF8Encoding(false);
-            psi.EnvironmentVariables["PATH"] = AppPaths.BaseDir.TrimEnd('\\') + ";" + (Environment.GetEnvironmentVariable("PATH") ?? "");
-
             Process proc = new Process();
-            proc.StartInfo = psi;
+            proc.StartInfo = BuildStartInfo(FormatArgs(args));
             proc.EnableRaisingEvents = true;
 
             TaskCompletionSource<YtRunResult> tcs = new TaskCompletionSource<YtRunResult>();
@@ -148,13 +188,13 @@ namespace YouTubeDownloader
             {
                 if (e.Data == null) return;
                 lock (sync) { output.AppendLine(e.Data); }
-                if (onLine != null) onLine(new YtLine { Text = e.Data, IsError = false });
+                if (onLine != null) onLine(new YtLine { Text = e.Data });
             };
             DataReceivedEventHandler errH = delegate(object s, DataReceivedEventArgs e)
             {
                 if (e.Data == null) return;
                 lock (sync) { output.AppendLine(e.Data); }
-                if (onLine != null) onLine(new YtLine { Text = e.Data, IsError = true });
+                if (onLine != null) onLine(new YtLine { Text = e.Data });
             };
 
             proc.OutputDataReceived += outH;
@@ -182,29 +222,88 @@ namespace YouTubeDownloader
             return RunAsync(args, null, null).GetAwaiter().GetResult();
         }
 
+        public class VersionResult
+        {
+            public int ExitCode;
+            public string Version;
+        }
+
+        public static Task<VersionResult> GetVersionAsync()
+        {
+            return Task.Run(new Func<VersionResult>(delegate
+            {
+                int c;
+                string v = GetVersionText(out c);
+                return new VersionResult { ExitCode = c, Version = v };
+            }));
+        }
+
         public static string GetVersionText(out int exitCode)
         {
-            ProcessStartInfo psi = new ProcessStartInfo(AppPaths.YtExe, "--version");
-            psi.WorkingDirectory = AppPaths.BaseDir;
-            psi.UseShellExecute = false;
-            psi.CreateNoWindow = true;
-            psi.RedirectStandardOutput = true;
-            psi.RedirectStandardError = true;
-            psi.StandardOutputEncoding = new UTF8Encoding(false);
-            psi.StandardErrorEncoding = new UTF8Encoding(false);
-            using (Process p = Process.Start(psi))
+            try
             {
-                string o = p.StandardOutput.ReadToEnd().Trim();
-                string e = p.StandardError.ReadToEnd().Trim();
-                if (!p.WaitForExit(15000))
+                using (Process p = Process.Start(BuildStartInfo("--version")))
                 {
-                    try { p.Kill(); } catch { }
-                    exitCode = -1;
-                    return "";
+                    string o = p.StandardOutput.ReadToEnd().Trim();
+                    string e = p.StandardError.ReadToEnd().Trim();
+                    if (!p.WaitForExit(15000))
+                    {
+                        try { p.Kill(); }
+                        catch { }
+                        exitCode = -1;
+                        return "";
+                    }
+                    exitCode = p.ExitCode;
+                    if (exitCode != 0 && o.Length == 0) o = e;
+                    return o;
                 }
-                exitCode = p.ExitCode;
-                if (exitCode != 0 && o.Length == 0) o = e;
-                return o;
+            }
+            catch
+            {
+                exitCode = -1;
+                return "";
+            }
+        }
+
+        public static bool TryGetTitle(string url, out string title)
+        {
+            title = null;
+            try
+            {
+                using (Process p = Process.Start(BuildStartInfo(FormatArgs(new[]
+                {
+                    "--ignore-config", "--encoding", "utf-8", "--color", "no_color",
+                    "--no-playlist", "--print", "title", url
+                }))))
+                {
+                    StringBuilder so = new StringBuilder();
+                    p.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) so.AppendLine(e.Data); };
+                    p.BeginOutputReadLine();
+                    p.BeginErrorReadLine();
+                    if (!p.WaitForExit(25000))
+                    {
+                        try { p.Kill(); }
+                        catch { }
+                        return false;
+                    }
+                    try { p.WaitForExit(); }
+                    catch { }
+                    if (p.ExitCode != 0) return false;
+                    foreach (string line in so.ToString().Split('\n'))
+                    {
+                        string s = line.Trim();
+                        if (s.Length > 0)
+                        {
+                            title = s;
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            catch
+            {
+                return false;
             }
         }
 
@@ -222,6 +321,23 @@ namespace YouTubeDownloader
                 {
                     tk.WaitForExit(5000);
                 }
+            }
+            catch
+            {
+                try { proc.Kill(); }
+                catch { }
+            }
+        }
+
+        public static void KillTreeNoWait(Process proc)
+        {
+            if (proc == null) return;
+            try
+            {
+                ProcessStartInfo psi = new ProcessStartInfo("taskkill", "/PID " + proc.Id + " /T /F");
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                Process.Start(psi);
             }
             catch
             {

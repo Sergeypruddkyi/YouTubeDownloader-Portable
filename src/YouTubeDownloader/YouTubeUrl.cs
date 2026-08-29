@@ -12,7 +12,12 @@ namespace YouTubeDownloader
         public static bool IsValid(string url)
         {
             if (string.IsNullOrWhiteSpace(url)) return false;
-            return Rx.IsMatch(url.Trim());
+            string t = url.Trim();
+            foreach (char ch in t)
+            {
+                if (ch <= ' ' || ch == '"' || ch == '\\') return false;
+            }
+            return Rx.IsMatch(t);
         }
 
         public static string ExtractFirst(string text)

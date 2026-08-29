@@ -10,8 +10,56 @@ using System.Windows.Forms;
 
 namespace YouTubeDownloader
 {
+    internal static class Theme
+    {
+        public static readonly Color Back = Color.FromArgb(30, 30, 30);
+        public static readonly Color Input = Color.FromArgb(45, 45, 48);
+        public static readonly Color Button = Color.FromArgb(51, 51, 55);
+        public static readonly Color ButtonHover = Color.FromArgb(63, 63, 70);
+        public static readonly Color Border = Color.FromArgb(63, 63, 70);
+        public static readonly Color Light = Color.FromArgb(225, 225, 225);
+        public static readonly Color Dim = Color.FromArgb(154, 154, 154);
+        public static readonly Color Green = Color.FromArgb(108, 203, 108);
+        public static readonly Color Red = Color.FromArgb(255, 107, 107);
+        public static readonly Color Orange = Color.FromArgb(255, 184, 77);
+        public static readonly Color Accent = Color.FromArgb(0, 120, 212);
+
+        public static void StyleButton(Button b)
+        {
+            b.FlatStyle = FlatStyle.Flat;
+            b.FlatAppearance.BorderColor = Border;
+            b.FlatAppearance.MouseOverBackColor = ButtonHover;
+            b.BackColor = Button;
+            b.ForeColor = Light;
+        }
+
+        public static void StyleAccent(Button b)
+        {
+            StyleButton(b);
+            b.BackColor = Accent;
+            b.FlatAppearance.MouseOverBackColor = Color.FromArgb(25, 135, 230);
+        }
+
+        public static void StyleInput(TextBox t)
+        {
+            t.BackColor = Input;
+            t.ForeColor = Light;
+            t.BorderStyle = BorderStyle.FixedSingle;
+        }
+    }
+
     public class MainForm : Form
     {
+        private const string AnsCheckYes = "Да, проверить";
+        private const string AnsNo = "Нет";
+        private const string AnsUseCurrent = "Использовать текущую версию";
+        private const string AnsTryLater = "Попробовать позже";
+        private const string AnsUpdate = "Обновить";
+        private const string AnsCancel = "Отмена";
+
+        private const int CollapsedHeight = 300;
+        private const int ExpandedHeight = 508;
+
         private readonly Settings _settings = new Settings(AppPaths.SettingsPath);
 
         private TextBox txtUrl;
@@ -19,6 +67,7 @@ namespace YouTubeDownloader
         private TextBox txtLog;
         private Label lblUrlStatus;
         private Label lblYtStatus;
+        private Label lblTitle;
         private Label lblProgress;
         private Label lblInfo;
         private Label lblStatus;
@@ -29,9 +78,14 @@ namespace YouTubeDownloader
         private Button btnCancel;
         private Button btnCheckUpdate;
         private Button btnOpenFolder;
+        private Button btnLogToggle;
 
         private readonly Timer _clipTimer = new Timer();
+        private readonly Timer _titleTimer = new Timer();
+        private bool _logVisible;
         private string _lastAutoUrl;
+        private string _lastTitleUrl;
+        private int _titleSeq;
         private Process _proc;
         private volatile bool _downloading;
         private volatile bool _updateRunning;
@@ -47,8 +101,9 @@ namespace YouTubeDownloader
         {
             Text = "YouTube Downloader";
             Font = new Font("Segoe UI", 9F);
-            ClientSize = new Size(790, 505);
-            MinimumSize = new Size(700, 480);
+            BackColor = Theme.Back;
+            ClientSize = new Size(790, CollapsedHeight);
+            MinimumSize = new Size(700, 320);
             StartPosition = FormStartPosition.CenterScreen;
             FormClosing += OnFormClosing;
             BuildUi();
@@ -60,12 +115,14 @@ namespace YouTubeDownloader
             l1.Text = "Ссылка:";
             l1.Location = new Point(12, 17);
             l1.Size = new Size(58, 20);
+            l1.ForeColor = Theme.Light;
             Controls.Add(l1);
 
             txtUrl = new TextBox();
             txtUrl.Location = new Point(75, 14);
             txtUrl.Size = new Size(600, 23);
             txtUrl.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            Theme.StyleInput(txtUrl);
             txtUrl.TextChanged += delegate { UpdateUrlStatus(); };
             Controls.Add(txtUrl);
 
@@ -74,6 +131,7 @@ namespace YouTubeDownloader
             btnPaste.Location = new Point(680, 13);
             btnPaste.Size = new Size(98, 25);
             btnPaste.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+            Theme.StyleButton(btnPaste);
             btnPaste.Click += delegate { PasteFromClipboard(); };
             Controls.Add(btnPaste);
 
@@ -81,13 +139,14 @@ namespace YouTubeDownloader
             lblUrlStatus.Location = new Point(75, 40);
             lblUrlStatus.Size = new Size(600, 16);
             lblUrlStatus.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-            lblUrlStatus.ForeColor = Color.Gray;
+            lblUrlStatus.ForeColor = Theme.Dim;
             Controls.Add(lblUrlStatus);
 
             Label l2 = new Label();
             l2.Text = "Папка:";
             l2.Location = new Point(12, 69);
             l2.Size = new Size(58, 20);
+            l2.ForeColor = Theme.Light;
             Controls.Add(l2);
 
             txtFolder = new TextBox();
@@ -95,7 +154,9 @@ namespace YouTubeDownloader
             txtFolder.Size = new Size(530, 23);
             txtFolder.ReadOnly = true;
             txtFolder.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-            txtFolder.BackColor = SystemColors.Control;
+            txtFolder.BackColor = Theme.Input;
+            txtFolder.ForeColor = Theme.Dim;
+            txtFolder.BorderStyle = BorderStyle.FixedSingle;
             Controls.Add(txtFolder);
 
             btnBrowse = new Button();
@@ -103,13 +164,14 @@ namespace YouTubeDownloader
             btnBrowse.Location = new Point(610, 65);
             btnBrowse.Size = new Size(80, 25);
             btnBrowse.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+            Theme.StyleButton(btnBrowse);
             btnBrowse.Click += delegate { BrowseFolder(); };
             Controls.Add(btnBrowse);
 
             lblYtStatus = new Label();
             lblYtStatus.Location = new Point(75, 95);
             lblYtStatus.Size = new Size(360, 20);
-            lblYtStatus.ForeColor = Color.Gray;
+            lblYtStatus.ForeColor = Theme.Dim;
             Controls.Add(lblYtStatus);
 
             btnCheckUpdate = new Button();
@@ -117,75 +179,111 @@ namespace YouTubeDownloader
             btnCheckUpdate.Location = new Point(445, 92);
             btnCheckUpdate.Size = new Size(233, 26);
             btnCheckUpdate.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+            Theme.StyleButton(btnCheckUpdate);
             btnCheckUpdate.Click += async delegate { await RunUpdateFlowAsync(false); };
             Controls.Add(btnCheckUpdate);
+
+            lblTitle = new Label();
+            lblTitle.Location = new Point(75, 121);
+            lblTitle.Size = new Size(600, 18);
+            lblTitle.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            lblTitle.ForeColor = Theme.Light;
+            lblTitle.AutoEllipsis = true;
+            Controls.Add(lblTitle);
 
             btnDownload = new Button();
             btnDownload.Text = "СКАЧАТЬ";
             btnDownload.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            btnDownload.Location = new Point(12, 128);
+            btnDownload.Location = new Point(12, 143);
             btnDownload.Size = new Size(370, 44);
             btnDownload.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            Theme.StyleAccent(btnDownload);
             btnDownload.Click += async delegate { await StartDownloadAsync(); };
             Controls.Add(btnDownload);
             AcceptButton = btnDownload;
 
             btnCancel = new Button();
             btnCancel.Text = "Отмена";
-            btnCancel.Location = new Point(392, 128);
+            btnCancel.Location = new Point(392, 143);
             btnCancel.Size = new Size(120, 44);
             btnCancel.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnCancel.Enabled = false;
+            Theme.StyleButton(btnCancel);
             btnCancel.Click += delegate { CancelDownload(); };
             Controls.Add(btnCancel);
 
             btnOpenFolder = new Button();
             btnOpenFolder.Text = "Открыть папку";
-            btnOpenFolder.Location = new Point(522, 128);
+            btnOpenFolder.Location = new Point(522, 143);
             btnOpenFolder.Size = new Size(256, 44);
             btnOpenFolder.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnOpenFolder.Enabled = false;
+            Theme.StyleButton(btnOpenFolder);
             btnOpenFolder.Click += delegate { OpenFolder(); };
             Controls.Add(btnOpenFolder);
 
             pb = new ProgressBar();
-            pb.Location = new Point(12, 184);
+            pb.Location = new Point(12, 196);
             pb.Size = new Size(766, 22);
             pb.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             Controls.Add(pb);
 
             lblProgress = new Label();
-            lblProgress.Location = new Point(12, 210);
+            lblProgress.Location = new Point(12, 222);
             lblProgress.Size = new Size(766, 16);
             lblProgress.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            lblProgress.ForeColor = Theme.Light;
             Controls.Add(lblProgress);
 
             lblInfo = new Label();
-            lblInfo.Location = new Point(12, 228);
-            lblInfo.Size = new Size(766, 16);
-            lblInfo.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            lblInfo.Location = new Point(12, 240);
+            lblInfo.Size = new Size(640, 16);
+            lblInfo.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+            lblInfo.ForeColor = Theme.Dim;
             Controls.Add(lblInfo);
 
+            btnLogToggle = new Button();
+            btnLogToggle.Text = "Показать лог";
+            btnLogToggle.Location = new Point(656, 238);
+            btnLogToggle.Size = new Size(122, 25);
+            btnLogToggle.Anchor = AnchorStyles.Right | AnchorStyles.Top;
+            Theme.StyleButton(btnLogToggle);
+            btnLogToggle.Click += delegate { ToggleLog(); };
+            Controls.Add(btnLogToggle);
+
             txtLog = new TextBox();
-            txtLog.Location = new Point(12, 250);
-            txtLog.Size = new Size(766, 224);
+            txtLog.Location = new Point(12, 268);
+            txtLog.Size = new Size(766, 207);
             txtLog.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom;
             txtLog.Multiline = true;
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
             txtLog.Font = new Font("Consolas", 9F);
             txtLog.WordWrap = false;
+            txtLog.Visible = false;
+            txtLog.BackColor = Theme.Back;
+            txtLog.ForeColor = Theme.Light;
+            txtLog.BorderStyle = BorderStyle.FixedSingle;
             Controls.Add(txtLog);
 
             lblStatus = new Label();
-            lblStatus.Location = new Point(12, 479);
+            lblStatus.Location = new Point(12, 483);
             lblStatus.Size = new Size(766, 18);
             lblStatus.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
             lblStatus.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
             lblStatus.AutoEllipsis = true;
-            lblStatus.ForeColor = Color.Gray;
+            lblStatus.ForeColor = Theme.Dim;
             lblStatus.Text = "Готово.";
             Controls.Add(lblStatus);
+        }
+
+        private void ToggleLog()
+        {
+            _logVisible = !_logVisible;
+            txtLog.Visible = _logVisible;
+            btnLogToggle.Text = _logVisible ? "Скрыть лог" : "Показать лог";
+            MinimumSize = _logVisible ? new Size(700, 520) : new Size(700, 320);
+            ClientSize = _logVisible ? new Size(790, ExpandedHeight) : new Size(790, CollapsedHeight);
         }
 
         protected override void OnLoad(EventArgs e)
@@ -195,17 +293,24 @@ namespace YouTubeDownloader
             string lf = _settings.LastFolder;
             if (!string.IsNullOrEmpty(lf)) txtFolder.Text = lf;
 
+            _titleTimer.Interval = 800;
+            _titleTimer.Tick += delegate
+            {
+                _titleTimer.Stop();
+                TryFetchTitle(txtUrl.Text.Trim());
+            };
+
             string missing = AppPaths.MissingCoreComponent();
             if (missing != null)
             {
                 lblYtStatus.Text = "Комплект неполный: не найден " + missing;
-                lblYtStatus.ForeColor = Color.Firebrick;
-                SetStatus("В папке приложения отсутствует " + missing + ". Скачать невозможно.", Color.Firebrick);
+                lblYtStatus.ForeColor = Theme.Red;
+                SetStatus("В папке приложения отсутствует " + missing + ". Скачать невозможно.", Theme.Red);
             }
             else if (!AppPaths.FfprobePresent())
             {
                 lblYtStatus.Text = "ffprobe.exe не найден (не критично)";
-                lblYtStatus.ForeColor = Color.DarkOrange;
+                lblYtStatus.ForeColor = Theme.Orange;
                 RefreshYtVersion();
             }
             else
@@ -219,26 +324,27 @@ namespace YouTubeDownloader
             _clipTimer.Start();
         }
 
+        private void ApplyYtVersion(string version)
+        {
+            _ytVersion = version;
+            lblYtStatus.Text = "yt-dlp: " + version + " — готов";
+            lblYtStatus.ForeColor = Theme.Green;
+        }
+
         private void RefreshYtVersion()
         {
             lblYtStatus.Text = "yt-dlp: определение версии…";
-            lblYtStatus.ForeColor = Color.Gray;
-            Task.Run(delegate
+            lblYtStatus.ForeColor = Theme.Dim;
+            YtDlpRunner.GetVersionAsync().ContinueWith(delegate(Task<YtDlpRunner.VersionResult> task)
             {
-                int code;
-                string v = YtDlpRunner.GetVersionText(out code);
+                YtDlpRunner.VersionResult r = task.Result;
                 BeginInvoke((MethodInvoker)delegate
                 {
-                    if (code == 0 && !string.IsNullOrEmpty(v))
-                    {
-                        _ytVersion = v;
-                        lblYtStatus.Text = "yt-dlp: " + v + " — готов";
-                        lblYtStatus.ForeColor = Color.Green;
-                    }
+                    if (r.ExitCode == 0 && !string.IsNullOrEmpty(r.Version)) ApplyYtVersion(r.Version);
                     else
                     {
                         lblYtStatus.Text = "yt-dlp: не удалось определить версию";
-                        lblYtStatus.ForeColor = Color.Firebrick;
+                        lblYtStatus.ForeColor = Theme.Red;
                     }
                 });
             });
@@ -248,6 +354,17 @@ namespace YouTubeDownloader
         {
             lblStatus.Text = text;
             lblStatus.ForeColor = color;
+        }
+
+        private void SetBusy()
+        {
+            bool busy = _downloading || _updateRunning;
+            btnDownload.Enabled = !busy;
+            btnCheckUpdate.Enabled = !busy;
+            btnBrowse.Enabled = !busy;
+            btnPaste.Enabled = !busy;
+            btnCancel.Enabled = _downloading;
+            txtUrl.ReadOnly = _downloading;
         }
 
         private void AppendLog(string s)
@@ -298,18 +415,54 @@ namespace YouTubeDownloader
             if (t.Length == 0)
             {
                 lblUrlStatus.Text = "Ожидание ссылки — скопируйте URL YouTube или введите вручную";
-                lblUrlStatus.ForeColor = Color.Gray;
+                lblUrlStatus.ForeColor = Theme.Dim;
+                lblTitle.Text = "";
+                _titleTimer.Stop();
             }
             else if (YouTubeUrl.IsValid(t))
             {
                 lblUrlStatus.Text = "YouTube-ссылка распознана";
-                lblUrlStatus.ForeColor = Color.Green;
+                lblUrlStatus.ForeColor = Theme.Green;
+                _titleTimer.Stop();
+                _titleTimer.Start();
             }
             else
             {
                 lblUrlStatus.Text = "Не похоже на YouTube-ссылку";
-                lblUrlStatus.ForeColor = Color.DarkOrange;
+                lblUrlStatus.ForeColor = Theme.Orange;
+                lblTitle.Text = "";
+                _titleTimer.Stop();
             }
+        }
+
+        private void TryFetchTitle(string url)
+        {
+            if (_downloading || _updateRunning) return;
+            if (!YouTubeUrl.IsValid(url)) return;
+            if (url == _lastTitleUrl) return;
+            _lastTitleUrl = url;
+            int seq = ++_titleSeq;
+            lblTitle.Text = "Получение названия…";
+            lblTitle.ForeColor = Theme.Dim;
+            Task.Run(delegate
+            {
+                string title;
+                bool ok = YtDlpRunner.TryGetTitle(url, out title);
+                BeginInvoke((MethodInvoker)delegate
+                {
+                    if (seq != _titleSeq) return;
+                    if (ok && !string.IsNullOrEmpty(title))
+                    {
+                        lblTitle.Text = "Название: " + title;
+                        lblTitle.ForeColor = Theme.Light;
+                    }
+                    else
+                    {
+                        lblTitle.Text = "Название получить не удалось (не критично для скачивания)";
+                        lblTitle.ForeColor = Theme.Orange;
+                    }
+                });
+            });
         }
 
         private void PasteFromClipboard()
@@ -323,7 +476,7 @@ namespace YouTubeDownloader
             }
             else
             {
-                SetStatus("В буфере обмена не найдена YouTube-ссылка.", Color.DarkOrange);
+                SetStatus("В буфере обмена не найдена YouTube-ссылка.", Theme.Orange);
             }
         }
 
@@ -395,7 +548,7 @@ namespace YouTubeDownloader
             }
             catch (Exception ex)
             {
-                SetStatus("Ошибка: не удалось создать папку — " + ex.Message, Color.Firebrick);
+                SetStatus("Ошибка: не удалось создать папку — " + ex.Message, Theme.Red);
                 return;
             }
 
@@ -410,14 +563,8 @@ namespace YouTubeDownloader
             _alreadyDownloaded = false;
             _currentFile = null;
             _lastArgs = args;
+            SetBusy();
 
-            btnDownload.Enabled = false;
-            btnCheckUpdate.Enabled = false;
-            btnBrowse.Enabled = false;
-            btnPaste.Enabled = false;
-            txtUrl.ReadOnly = true;
-            btnCancel.Enabled = true;
-            btnOpenFolder.Enabled = false;
             pb.Value = 0;
             lblProgress.Text = "";
             lblInfo.Text = "Подготовка…";
@@ -429,17 +576,12 @@ namespace YouTubeDownloader
 
             _downloading = false;
             _proc = null;
-            btnDownload.Enabled = true;
-            btnCheckUpdate.Enabled = true;
-            btnBrowse.Enabled = true;
-            btnPaste.Enabled = true;
-            txtUrl.ReadOnly = false;
-            btnCancel.Enabled = false;
+            SetBusy();
 
             if (_canceled)
             {
                 lblInfo.Text = "";
-                SetStatus("Скачивание отменено пользователем.", Color.DarkOrange);
+                SetStatus("Скачивание отменено пользователем.", Theme.Orange);
                 return;
             }
 
@@ -448,8 +590,8 @@ namespace YouTubeDownloader
             if (result.ExitCode == 0)
             {
                 string name = _currentFile != null ? Path.GetFileName(_currentFile) : "файл";
-                if (_alreadyDownloaded) SetStatus("Этот файл уже скачан ранее: " + name, Color.Green);
-                else SetStatus("Готово: " + name, Color.Green);
+                if (_alreadyDownloaded) SetStatus("Этот файл уже скачан ранее: " + name, Theme.Green);
+                else SetStatus("Готово: " + name, Theme.Green);
                 pb.Value = 100;
                 btnOpenFolder.Enabled = true;
                 return;
@@ -466,14 +608,14 @@ namespace YouTubeDownloader
             else shortMsg = "Неизвестная ошибка yt-dlp (код " + _lastExitCode + ").";
 
             string detail = cls != null && cls.MatchedLine != null ? cls.MatchedLine : null;
-            SetStatus("Ошибка: " + shortMsg + (detail != null ? " [" + detail + "]" : ""), Color.Firebrick);
+            SetStatus("Ошибка: " + shortMsg + (detail != null ? " [" + detail + "]" : ""), Theme.Red);
 
             if (cls != null && cls.Category == ErrorCategory.UpdateSuspect && allowUpdateFlow)
             {
                 string ans = PromptForm.Show(this, "Возможная проблема версии",
                     "Скачивание завершилось ошибкой.\n\n" + shortMsg + "\n\nПричина обозначена как «возможная проблема версии yt-dlp» — точно установить её нельзя.\n\nПроверить наличие обновления yt-dlp?",
-                    true, "Да, проверить", "Нет");
-                if (ans == "Да, проверить") await RunUpdateFlowAsync(true);
+                    true, AnsCheckYes, AnsNo);
+                if (ans == AnsCheckYes) await RunUpdateFlowAsync(true);
             }
         }
 
@@ -481,7 +623,7 @@ namespace YouTubeDownloader
         {
             if (!_downloading) return;
             _canceled = true;
-            SetStatus("Остановка…", Color.DarkOrange);
+            SetStatus("Остановка…", Theme.Orange);
             Process p = _proc;
             if (p != null)
             {
@@ -500,22 +642,21 @@ namespace YouTubeDownloader
             }
 
             _updateRunning = true;
-            btnCheckUpdate.Enabled = false;
-            btnDownload.Enabled = false;
-            SetStatus("Проверка обновления yt-dlp…", Color.Gray);
+            SetBusy();
+            SetStatus("Проверка обновления yt-dlp…", Theme.Dim);
 
             try
             {
                 string local = _ytVersion;
                 if (string.IsNullOrEmpty(local))
                 {
-                    int c;
-                    local = YtDlpRunner.GetVersionText(out c);
+                    YtDlpRunner.VersionResult vr = await YtDlpRunner.GetVersionAsync();
+                    local = vr.ExitCode == 0 ? vr.Version : null;
                 }
                 if (string.IsNullOrEmpty(local))
                 {
                     MessageBox.Show(this, "Не удалось определить версию установленного yt.exe.", "Проверка обновления", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    SetStatus("Ошибка: версия yt-dlp не определена.", Color.Firebrick);
+                    SetStatus("Ошибка: версия yt-dlp не определена.", Theme.Red);
                     return;
                 }
 
@@ -534,11 +675,11 @@ namespace YouTubeDownloader
                 {
                     string ans = PromptForm.Show(this, "Проверка обновления",
                         "Не удалось проверить обновление yt-dlp.\nПричина: " + netErr + "\n\nЭто не означает, что yt-dlp устарел.",
-                        false, "Использовать текущую версию", "Попробовать позже");
-                    if (ans == "Использовать текущую версию")
-                        SetStatus("Используется текущая версия yt-dlp " + local + ".", Color.Gray);
+                        false, AnsUseCurrent, AnsTryLater);
+                    if (ans == AnsUseCurrent)
+                        SetStatus("Используется текущая версия yt-dlp " + local + ".", Theme.Dim);
                     else
-                        SetStatus("Проверка обновления отложена.", Color.Gray);
+                        SetStatus("Проверка обновления отложена.", Theme.Dim);
                     return;
                 }
 
@@ -546,16 +687,16 @@ namespace YouTubeDownloader
                 if (cmp <= 0)
                 {
                     MessageBox.Show(this, "Установлена актуальная версия yt-dlp (" + local + ").\nОшибка, скорее всего, не связана с версией.", "Проверка обновления", MessageBoxButtons.OK, MessageBoxIcon.Information);
-                    SetStatus("yt-dlp " + local + " — актуален.", Color.Gray);
+                    SetStatus("yt-dlp " + local + " — актуален.", Theme.Dim);
                     return;
                 }
 
                 string ans2 = PromptForm.Show(this, "Доступно обновление yt-dlp",
                     "Установлена версия: " + local + "\nДоступна версия: " + latest + "\n\nОбновить сейчас?",
-                    false, "Обновить", "Отмена");
-                if (ans2 != "Обновить")
+                    false, AnsUpdate, AnsCancel);
+                if (ans2 != AnsUpdate)
                 {
-                    SetStatus("Обновление отложено.", Color.Gray);
+                    SetStatus("Обновление отложено.", Theme.Dim);
                     return;
                 }
 
@@ -564,31 +705,27 @@ namespace YouTubeDownloader
             finally
             {
                 _updateRunning = false;
-                btnCheckUpdate.Enabled = true;
-                btnDownload.Enabled = true;
+                SetBusy();
             }
         }
 
         private async Task PerformUpdateAsync(string oldVersion, bool autoRetryAfterUpdate)
         {
             _updateRunning = true;
-            btnCheckUpdate.Enabled = false;
-            btnDownload.Enabled = false;
+            SetBusy();
             try
             {
-                SetStatus("Обновление yt-dlp " + oldVersion + "…", Color.Gray);
+                SetStatus("Обновление yt-dlp " + oldVersion + "…", Theme.Dim);
                 AppendLog("$ yt.exe -U");
                 YtRunResult r = await YtDlpRunner.RunAsync(YtDlpRunner.UpdateArgs(), delegate(YtLine line) { OnYtLine(line); }, delegate(Process p) { _proc = p; });
 
-                int c;
-                string now = YtDlpRunner.GetVersionText(out c);
-                bool ok = c == 0 && UpdateChecker.CompareVersions(now, oldVersion) > 0;
+                YtDlpRunner.VersionResult vr = await YtDlpRunner.GetVersionAsync();
+                bool ok = vr.ExitCode == 0 && UpdateChecker.CompareVersions(vr.Version, oldVersion) > 0;
 
                 if (ok)
                 {
-                    _ytVersion = now;
-                    lblYtStatus.Text = "yt-dlp: " + now + " — готов";
-                    SetStatus("yt-dlp обновлён: " + oldVersion + " → " + now + ".", Color.Green);
+                    ApplyYtVersion(vr.Version);
+                    SetStatus("yt-dlp обновлён: " + oldVersion + " → " + vr.Version + ".", Theme.Green);
                     if (autoRetryAfterUpdate && !_autoRetried && _lastArgs != null)
                     {
                         _autoRetried = true;
@@ -599,14 +736,13 @@ namespace YouTubeDownloader
                 else
                 {
                     MessageBox.Show(this, "Обновление не удалось. Подробности — в логе.", "Обновление yt-dlp", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    SetStatus("Ошибка: обновление yt-dlp не выполнено (осталась версия " + oldVersion + ").", Color.Firebrick);
+                    SetStatus("Ошибка: обновление yt-dlp не выполнено (осталась версия " + oldVersion + ").", Theme.Red);
                 }
             }
             finally
             {
                 _updateRunning = false;
-                btnCheckUpdate.Enabled = true;
-                btnDownload.Enabled = true;
+                SetBusy();
             }
         }
 
@@ -648,7 +784,6 @@ namespace YouTubeDownloader
             if (pct.HasValue)
             {
                 int v = (int)Math.Round(pct.Value);
-                if (v < pb.Minimum) v = pb.Minimum;
                 if (v > pb.Maximum) v = pb.Maximum;
                 pb.Value = v;
 
@@ -675,7 +810,7 @@ namespace YouTubeDownloader
             }
             _canceled = true;
             Process p = _proc;
-            if (p != null) YtDlpRunner.KillTree(p);
+            if (p != null) YtDlpRunner.KillTreeNoWait(p);
         }
     }
 }
