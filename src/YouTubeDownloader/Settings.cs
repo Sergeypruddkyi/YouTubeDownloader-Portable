@@ -21,6 +21,12 @@ namespace YouTubeDownloader
             set { Set("LastFolder", value); }
         }
 
+        public bool HasChosenFolder
+        {
+            get { return string.Equals(Get("FolderChosen"), "true", StringComparison.OrdinalIgnoreCase); }
+            set { Set("FolderChosen", value ? "true" : null); }
+        }
+
         public string Get(string key)
         {
             string v;

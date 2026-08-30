@@ -24,6 +24,9 @@ namespace YouTubeDownloader
         public static readonly Color Orange = Color.FromArgb(255, 184, 77);
         public static readonly Color Accent = Color.FromArgb(0, 120, 212);
 
+        public static readonly Font BoldStatus = new Font("Segoe UI", 10F, FontStyle.Bold);
+        public static readonly Font Regular = new Font("Segoe UI", 9F);
+
         public static void StyleButton(Button b)
         {
             b.FlatStyle = FlatStyle.Flat;
@@ -140,17 +143,26 @@ namespace YouTubeDownloader
             lblUrlStatus.Size = new Size(600, 16);
             lblUrlStatus.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             lblUrlStatus.ForeColor = Theme.Dim;
+            lblUrlStatus.Text = "Ожидание ссылки — скопируйте URL YouTube или введите вручную";
             Controls.Add(lblUrlStatus);
+
+            lblTitle = new Label();
+            lblTitle.Location = new Point(75, 57);
+            lblTitle.Size = new Size(600, 15);
+            lblTitle.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
+            lblTitle.ForeColor = Theme.Light;
+            lblTitle.AutoEllipsis = true;
+            Controls.Add(lblTitle);
 
             Label l2 = new Label();
             l2.Text = "Папка:";
-            l2.Location = new Point(12, 69);
+            l2.Location = new Point(12, 78);
             l2.Size = new Size(58, 20);
             l2.ForeColor = Theme.Light;
             Controls.Add(l2);
 
             txtFolder = new TextBox();
-            txtFolder.Location = new Point(75, 66);
+            txtFolder.Location = new Point(75, 75);
             txtFolder.Size = new Size(530, 23);
             txtFolder.ReadOnly = true;
             txtFolder.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
@@ -161,7 +173,7 @@ namespace YouTubeDownloader
 
             btnBrowse = new Button();
             btnBrowse.Text = "Обзор…";
-            btnBrowse.Location = new Point(610, 65);
+            btnBrowse.Location = new Point(610, 74);
             btnBrowse.Size = new Size(80, 25);
             btnBrowse.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnBrowse);
@@ -169,32 +181,24 @@ namespace YouTubeDownloader
             Controls.Add(btnBrowse);
 
             lblYtStatus = new Label();
-            lblYtStatus.Location = new Point(75, 95);
+            lblYtStatus.Location = new Point(75, 104);
             lblYtStatus.Size = new Size(360, 20);
             lblYtStatus.ForeColor = Theme.Dim;
             Controls.Add(lblYtStatus);
 
             btnCheckUpdate = new Button();
             btnCheckUpdate.Text = "Проверить обновление yt-dlp";
-            btnCheckUpdate.Location = new Point(445, 92);
+            btnCheckUpdate.Location = new Point(445, 101);
             btnCheckUpdate.Size = new Size(233, 26);
             btnCheckUpdate.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnCheckUpdate);
             btnCheckUpdate.Click += async delegate { await RunUpdateFlowAsync(false); };
             Controls.Add(btnCheckUpdate);
 
-            lblTitle = new Label();
-            lblTitle.Location = new Point(75, 121);
-            lblTitle.Size = new Size(600, 18);
-            lblTitle.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-            lblTitle.ForeColor = Theme.Light;
-            lblTitle.AutoEllipsis = true;
-            Controls.Add(lblTitle);
-
             btnDownload = new Button();
             btnDownload.Text = "СКАЧАТЬ";
             btnDownload.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            btnDownload.Location = new Point(12, 143);
+            btnDownload.Location = new Point(12, 135);
             btnDownload.Size = new Size(370, 44);
             btnDownload.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleAccent(btnDownload);
@@ -204,7 +208,7 @@ namespace YouTubeDownloader
 
             btnCancel = new Button();
             btnCancel.Text = "Отмена";
-            btnCancel.Location = new Point(392, 143);
+            btnCancel.Location = new Point(392, 135);
             btnCancel.Size = new Size(120, 44);
             btnCancel.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnCancel.Enabled = false;
@@ -214,7 +218,7 @@ namespace YouTubeDownloader
 
             btnOpenFolder = new Button();
             btnOpenFolder.Text = "Открыть папку";
-            btnOpenFolder.Location = new Point(522, 143);
+            btnOpenFolder.Location = new Point(522, 135);
             btnOpenFolder.Size = new Size(256, 44);
             btnOpenFolder.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnOpenFolder.Enabled = false;
@@ -291,7 +295,14 @@ namespace YouTubeDownloader
             base.OnLoad(e);
             _settings.Load();
             string lf = _settings.LastFolder;
-            if (!string.IsNullOrEmpty(lf)) txtFolder.Text = lf;
+            if (_settings.HasChosenFolder && !string.IsNullOrEmpty(lf))
+            {
+                txtFolder.Text = lf;
+            }
+            else
+            {
+                SetStatus("Папка назначения не выбрана — нажмите «Обзор…» перед первым скачиванием.", Theme.Dim);
+            }
 
             _titleTimer.Interval = 800;
             _titleTimer.Tick += delegate
@@ -492,6 +503,7 @@ namespace YouTubeDownloader
                 {
                     txtFolder.Text = dlg.SelectedPath;
                     _settings.LastFolder = dlg.SelectedPath;
+                    _settings.HasChosenFolder = true;
                     _settings.Save();
                 }
             }
@@ -567,7 +579,11 @@ namespace YouTubeDownloader
 
             pb.Value = 0;
             lblProgress.Text = "";
+            lblProgress.Font = Theme.Regular;
+            lblProgress.ForeColor = Theme.Light;
             lblInfo.Text = "Подготовка…";
+            lblInfo.ForeColor = Theme.Dim;
+            btnOpenFolder.Enabled = false;
 
             AppendLog("─────────────────────────────────────────────");
             AppendLog("$ yt.exe " + YtDlpRunner.FormatArgs(args));
@@ -590,10 +606,14 @@ namespace YouTubeDownloader
             if (result.ExitCode == 0)
             {
                 string name = _currentFile != null ? Path.GetFileName(_currentFile) : "файл";
-                if (_alreadyDownloaded) SetStatus("Этот файл уже скачан ранее: " + name, Theme.Green);
-                else SetStatus("Готово: " + name, Theme.Green);
+                lblProgress.Text = _alreadyDownloaded ? "✓ ФАЙЛ УЖЕ БЫЛ СКАЧАН" : "✓ СКАЧИВАНИЕ ЗАВЕРШЕНО";
+                lblProgress.Font = Theme.BoldStatus;
+                lblProgress.ForeColor = Theme.Green;
+                lblInfo.Text = name;
+                lblInfo.ForeColor = Theme.Light;
                 pb.Value = 100;
                 btnOpenFolder.Enabled = true;
+                SetStatus("Готово: " + name, Theme.Green);
                 return;
             }
 

@@ -120,11 +120,20 @@ namespace YouTubeDownloader
             {
                 Settings st = new Settings(AppPaths.SettingsPath);
                 st.LastFolder = "C:\\__selftest__";
+                st.HasChosenFolder = true;
                 st.Save();
                 Settings st2 = new Settings(AppPaths.SettingsPath);
                 st2.Load();
-                bool ok = string.Equals(st2.LastFolder, "C:\\__selftest__", StringComparison.Ordinal);
-                Check("settings.ini запись/чтение", ok, AppPaths.SettingsPath);
+                bool ok = string.Equals(st2.LastFolder, "C:\\__selftest__", StringComparison.Ordinal) && st2.HasChosenFolder;
+
+                Settings legacy = new Settings(AppPaths.SettingsPath);
+                legacy.LastFolder = "E:\\YouTubeDownloader\\Видео";
+                legacy.Save();
+                Settings legacy2 = new Settings(AppPaths.SettingsPath);
+                legacy2.Load();
+                bool legacyIgnored = !legacy2.HasChosenFolder;
+
+                Check("settings.ini запись/чтение (LastFolder + FolderChosen)", ok && legacyIgnored, AppPaths.SettingsPath);
                 try { File.Delete(AppPaths.SettingsPath); }
                 catch { }
             }
