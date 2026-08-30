@@ -124,7 +124,7 @@ namespace YouTubeDownloader
             Font = Theme.Regular;
             BackColor = Theme.Back;
             ClientSize = new Size(790, CollapsedHeight);
-            MinimumSize = new Size(700, 368);
+            MinimumSize = new Size(790, 368);
             StartPosition = FormStartPosition.CenterScreen;
             FormClosing += OnFormClosing;
             BuildUi();
@@ -346,7 +346,7 @@ namespace YouTubeDownloader
             _logVisible = !_logVisible;
             txtLog.Visible = _logVisible;
             btnLogToggle.Text = L10n.T(_logVisible ? Msg.BtnHideLog : Msg.BtnShowLog);
-            MinimumSize = _logVisible ? new Size(700, 561) : new Size(700, 368);
+            MinimumSize = _logVisible ? new Size(790, 561) : new Size(790, 368);
             ClientSize = _logVisible ? new Size(790, ExpandedHeight) : new Size(790, CollapsedHeight);
         }
 
