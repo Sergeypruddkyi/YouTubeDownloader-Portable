@@ -57,8 +57,8 @@ namespace YouTubeDownloader
 
     public class MainForm : Form
     {
-        private const int CollapsedHeight = 312;
-        private const int ExpandedHeight = 515;
+        private const int CollapsedHeight = 368;
+        private const int ExpandedHeight = 561;
 
         private readonly Settings _settings = new Settings(AppPaths.SettingsPath);
 
@@ -81,6 +81,8 @@ namespace YouTubeDownloader
         private Button btnOpenFolder;
         private Button btnLogToggle;
         private ComboBox cboLang;
+        private Panel content;
+        private DarkTitleBar titleBar;
 
         private readonly Timer _clipTimer = new Timer();
         private readonly Timer _titleTimer = new Timer();
@@ -118,10 +120,11 @@ namespace YouTubeDownloader
             Text = "YouTube Downloader";
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
             catch { }
+            FormBorderStyle = FormBorderStyle.None;
             Font = Theme.Regular;
             BackColor = Theme.Back;
             ClientSize = new Size(790, CollapsedHeight);
-            MinimumSize = new Size(700, 330);
+            MinimumSize = new Size(700, 368);
             StartPosition = FormStartPosition.CenterScreen;
             FormClosing += OnFormClosing;
             BuildUi();
@@ -129,11 +132,17 @@ namespace YouTubeDownloader
 
         private void BuildUi()
         {
+            content = new ChromePanel(this);
+            content.Location = new Point(0, DarkTitleBar.BarHeight);
+            content.Size = new Size(ClientSize.Width, ClientSize.Height - DarkTitleBar.BarHeight);
+            content.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+            content.BackColor = Theme.Back;
+
             lblUrl = new Label();
             lblUrl.Location = new Point(12, 17);
             lblUrl.Size = new Size(58, 24);
             lblUrl.ForeColor = Theme.Light;
-            Controls.Add(lblUrl);
+            content.Controls.Add(lblUrl);
 
             txtUrl = new TextBox();
             txtUrl.Location = new Point(75, 15);
@@ -141,7 +150,7 @@ namespace YouTubeDownloader
             txtUrl.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleInput(txtUrl);
             txtUrl.TextChanged += delegate { UpdateUrlStatus(); };
-            Controls.Add(txtUrl);
+            content.Controls.Add(txtUrl);
 
             btnPaste = new Button();
             btnPaste.Location = new Point(680, 14);
@@ -149,7 +158,7 @@ namespace YouTubeDownloader
             btnPaste.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnPaste);
             btnPaste.Click += delegate { PasteFromClipboard(); };
-            Controls.Add(btnPaste);
+            content.Controls.Add(btnPaste);
 
             lblTitle = new Label();
             lblTitle.Location = new Point(75, 47);
@@ -157,13 +166,13 @@ namespace YouTubeDownloader
             lblTitle.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             lblTitle.ForeColor = Theme.Dim;
             lblTitle.AutoEllipsis = true;
-            Controls.Add(lblTitle);
+            content.Controls.Add(lblTitle);
 
             lblFolder = new Label();
             lblFolder.Location = new Point(12, 77);
             lblFolder.Size = new Size(58, 24);
             lblFolder.ForeColor = Theme.Light;
-            Controls.Add(lblFolder);
+            content.Controls.Add(lblFolder);
 
             txtFolder = new TextBox();
             txtFolder.Location = new Point(75, 74);
@@ -173,7 +182,7 @@ namespace YouTubeDownloader
             txtFolder.BackColor = Theme.Input;
             txtFolder.ForeColor = Theme.Dim;
             txtFolder.BorderStyle = BorderStyle.FixedSingle;
-            Controls.Add(txtFolder);
+            content.Controls.Add(txtFolder);
 
             btnBrowse = new Button();
             btnBrowse.Location = new Point(610, 73);
@@ -181,13 +190,13 @@ namespace YouTubeDownloader
             btnBrowse.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnBrowse);
             btnBrowse.Click += delegate { BrowseFolder(); };
-            Controls.Add(btnBrowse);
+            content.Controls.Add(btnBrowse);
 
             lblYtStatus = new Label();
             lblYtStatus.Location = new Point(75, 108);
             lblYtStatus.Size = new Size(290, 22);
             lblYtStatus.ForeColor = Theme.Dim;
-            Controls.Add(lblYtStatus);
+            content.Controls.Add(lblYtStatus);
 
             btnCheckUpdate = new Button();
             btnCheckUpdate.Location = new Point(460, 106);
@@ -195,7 +204,7 @@ namespace YouTubeDownloader
             btnCheckUpdate.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnCheckUpdate);
             btnCheckUpdate.Click += async delegate { await RunUpdateFlowAsync(false); };
-            Controls.Add(btnCheckUpdate);
+            content.Controls.Add(btnCheckUpdate);
 
             cboLang = new ComboBox();
             cboLang.DropDownStyle = ComboBoxStyle.DropDownList;
@@ -208,7 +217,7 @@ namespace YouTubeDownloader
             cboLang.BackColor = Theme.Input;
             cboLang.ForeColor = Theme.Light;
             cboLang.SelectedIndexChanged += delegate { OnLanguageComboChanged(); };
-            Controls.Add(cboLang);
+            content.Controls.Add(cboLang);
 
             btnDownload = new Button();
             btnDownload.Font = Theme.Big;
@@ -217,7 +226,7 @@ namespace YouTubeDownloader
             btnDownload.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleAccent(btnDownload);
             btnDownload.Click += async delegate { await StartDownloadAsync(); };
-            Controls.Add(btnDownload);
+            content.Controls.Add(btnDownload);
             AcceptButton = btnDownload;
 
             btnCancel = new Button();
@@ -227,7 +236,7 @@ namespace YouTubeDownloader
             btnCancel.Enabled = false;
             Theme.StyleButton(btnCancel);
             btnCancel.Click += delegate { CancelDownload(); };
-            Controls.Add(btnCancel);
+            content.Controls.Add(btnCancel);
 
             btnOpenFolder = new Button();
             btnOpenFolder.Location = new Point(522, 142);
@@ -236,27 +245,27 @@ namespace YouTubeDownloader
             btnOpenFolder.Enabled = false;
             Theme.StyleButton(btnOpenFolder);
             btnOpenFolder.Click += delegate { OpenFolder(); };
-            Controls.Add(btnOpenFolder);
+            content.Controls.Add(btnOpenFolder);
 
             pb = new ProgressBar();
             pb.Location = new Point(12, 202);
             pb.Size = new Size(766, 24);
             pb.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-            Controls.Add(pb);
+            content.Controls.Add(pb);
 
             lblProgress = new Label();
             lblProgress.Location = new Point(12, 230);
             lblProgress.Size = new Size(766, 22);
             lblProgress.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             lblProgress.ForeColor = Theme.Light;
-            Controls.Add(lblProgress);
+            content.Controls.Add(lblProgress);
 
             lblInfo = new Label();
             lblInfo.Location = new Point(12, 254);
             lblInfo.Size = new Size(640, 22);
             lblInfo.Anchor = AnchorStyles.Left | AnchorStyles.Top;
             lblInfo.ForeColor = Theme.Dim;
-            Controls.Add(lblInfo);
+            content.Controls.Add(lblInfo);
 
             btnLogToggle = new Button();
             btnLogToggle.Location = new Point(656, 252);
@@ -264,7 +273,7 @@ namespace YouTubeDownloader
             btnLogToggle.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnLogToggle);
             btnLogToggle.Click += delegate { ToggleLog(); };
-            Controls.Add(btnLogToggle);
+            content.Controls.Add(btnLogToggle);
 
             txtLog = new TextBox();
             txtLog.Location = new Point(12, 286);
@@ -279,7 +288,7 @@ namespace YouTubeDownloader
             txtLog.BackColor = Theme.Back;
             txtLog.ForeColor = Theme.Light;
             txtLog.BorderStyle = BorderStyle.FixedSingle;
-            Controls.Add(txtLog);
+            content.Controls.Add(txtLog);
 
             lblStatus = new Label();
             lblStatus.Location = new Point(12, 487);
@@ -288,7 +297,11 @@ namespace YouTubeDownloader
             lblStatus.Font = Theme.BoldStatus;
             lblStatus.AutoEllipsis = true;
             lblStatus.ForeColor = Theme.Dim;
-            Controls.Add(lblStatus);
+            content.Controls.Add(lblStatus);
+
+            Controls.Add(content);
+            titleBar = new DarkTitleBar(this);
+            Controls.Add(titleBar);
 
             ApplyStrings();
             SetStatus(Msg.StatusReady, Theme.Dim);
@@ -333,7 +346,7 @@ namespace YouTubeDownloader
             _logVisible = !_logVisible;
             txtLog.Visible = _logVisible;
             btnLogToggle.Text = L10n.T(_logVisible ? Msg.BtnHideLog : Msg.BtnShowLog);
-            MinimumSize = _logVisible ? new Size(700, 525) : new Size(700, 332);
+            MinimumSize = _logVisible ? new Size(700, 561) : new Size(700, 368);
             ClientSize = _logVisible ? new Size(790, ExpandedHeight) : new Size(790, CollapsedHeight);
         }
 
@@ -960,6 +973,82 @@ namespace YouTubeDownloader
                 if (eta != null) parts.Add("ETA " + eta);
                 SetProgressRaw(string.Join("  ·  ", parts.ToArray()));
             }
+        }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            ApplyChromeStyles();
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            ApplyChromeStyles();
+        }
+
+        private void ApplyChromeStyles()
+        {
+            int style = ChromeApi.GetWindowLong(Handle, ChromeApi.GwlStyle);
+            int desired = style | 0x00040000 | 0x00C00000 | 0x00020000 | 0x00010000 | 0x00080000;
+            if (desired != style)
+            {
+                ChromeApi.SetWindowLong(Handle, ChromeApi.GwlStyle, desired);
+                ChromeApi.SetWindowPos(Handle, IntPtr.Zero, 0, 0, 0, 0, 0x0001 | 0x0002 | 0x0004 | 0x0010 | 0x0020);
+            }
+        }
+
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == ChromeApi.WmGetMinMaxInfo)
+            {
+                base.WndProc(ref m);
+                IntPtr mon = ChromeApi.MonitorFromWindow(m.HWnd, ChromeApi.MonitorDefaultToNearest);
+                ChromeApi.MonitorInfo mi = new ChromeApi.MonitorInfo();
+                mi.CbSize = (uint)Marshal.SizeOf(typeof(ChromeApi.MonitorInfo));
+                if (mon != IntPtr.Zero && ChromeApi.GetMonitorInfo(mon, ref mi))
+                {
+                    Marshal.WriteInt32(m.LParam, 8, mi.Work.Right - mi.Work.Left);
+                    Marshal.WriteInt32(m.LParam, 12, mi.Work.Bottom - mi.Work.Top);
+                    Marshal.WriteInt32(m.LParam, 16, mi.Work.Left);
+                    Marshal.WriteInt32(m.LParam, 20, mi.Work.Top);
+                }
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            if (m.Msg == ChromeApi.WmNcCalcSize && m.WParam != IntPtr.Zero)
+            {
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            if (m.Msg == ChromeApi.WmNcHitTest)
+            {
+                int sx = unchecked((short)((long)m.LParam & 0xFFFF));
+                int sy = unchecked((short)(((long)m.LParam >> 16) & 0xFFFF));
+                Point cpt = PointToClient(new Point(sx, sy));
+                bool maximized = ChromeApi.IsZoomedStyle(m.HWnd);
+                if (!maximized)
+                {
+                    int fw = ChromeApi.GetSystemMetrics(ChromeApi.SmCxSizeFrame) + ChromeApi.GetSystemMetrics(ChromeApi.SmCxPaddedBorder);
+                    int fh = ChromeApi.GetSystemMetrics(ChromeApi.SmCySizeFrame) + ChromeApi.GetSystemMetrics(ChromeApi.SmCxPaddedBorder);
+                    bool left = cpt.X < fw;
+                    bool right = cpt.X >= ClientSize.Width - fw;
+                    bool top = cpt.Y < fh;
+                    bool bottom = cpt.Y >= ClientSize.Height - fh;
+                    if (top && left) { m.Result = (IntPtr)ChromeApi.HtTopLeft; return; }
+                    if (top && right) { m.Result = (IntPtr)ChromeApi.HtTopRight; return; }
+                    if (bottom && left) { m.Result = (IntPtr)ChromeApi.HtBottomLeft; return; }
+                    if (bottom && right) { m.Result = (IntPtr)ChromeApi.HtBottomRight; return; }
+                    if (top) { m.Result = (IntPtr)ChromeApi.HtTop; return; }
+                    if (bottom) { m.Result = (IntPtr)ChromeApi.HtBottom; return; }
+                    if (left) { m.Result = (IntPtr)ChromeApi.HtLeft; return; }
+                    if (right) { m.Result = (IntPtr)ChromeApi.HtRight; return; }
+                }
+                if (cpt.Y < DarkTitleBar.BarHeight) { m.Result = (IntPtr)ChromeApi.HtCaption; return; }
+                m.Result = (IntPtr)ChromeApi.HtClient;
+                return;
+            }
+            base.WndProc(ref m);
         }
 
         private void OnFormClosing(object sender, FormClosingEventArgs e)
