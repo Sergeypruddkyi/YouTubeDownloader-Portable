@@ -354,7 +354,7 @@ namespace YouTubeDownloader
         {
             base.OnLoad(e);
             string lf = _settings.LastFolder;
-            if (_settings.HasChosenFolder && !string.IsNullOrEmpty(lf))
+            if (_settings.HasChosenFolder && !string.IsNullOrEmpty(lf) && Directory.Exists(lf))
             {
                 txtFolder.Text = lf;
             }
