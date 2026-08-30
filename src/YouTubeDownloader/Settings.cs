@@ -27,6 +27,12 @@ namespace YouTubeDownloader
             set { Set("FolderChosen", value ? "true" : null); }
         }
 
+        public string Language
+        {
+            get { return Get("Language"); }
+            set { Set("Language", value); }
+        }
+
         public string Get(string key)
         {
             string v;

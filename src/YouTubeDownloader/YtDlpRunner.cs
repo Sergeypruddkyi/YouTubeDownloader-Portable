@@ -65,12 +65,12 @@ namespace YouTubeDownloader
             return RxAlready.IsMatch(line);
         }
 
-        public static string PhaseOf(string line)
+        public static Msg? PhaseOf(string line)
         {
             if (string.IsNullOrEmpty(line)) return null;
-            if (line.StartsWith("[Merger]") || line.StartsWith("[ExtractAudio]") || line.StartsWith("[FixupM")) return "Склейка/обработка (FFmpeg)…";
-            if (line.StartsWith("[download]")) return "Скачивание…";
-            if (line.StartsWith("[youtube]") || line.StartsWith("[info]")) return "Получение данных о видео…";
+            if (line.StartsWith("[Merger]") || line.StartsWith("[ExtractAudio]") || line.StartsWith("[FixupM")) return Msg.PhaseMerging;
+            if (line.StartsWith("[download]")) return Msg.PhaseDownloading;
+            if (line.StartsWith("[youtube]") || line.StartsWith("[info]")) return Msg.PhaseFetchingInfo;
             return null;
         }
     }

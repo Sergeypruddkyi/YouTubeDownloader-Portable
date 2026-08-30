@@ -20,62 +20,62 @@ namespace YouTubeDownloader
         {
             public readonly Regex Rx;
             public readonly ErrorCategory Cat;
-            public readonly string Hint;
+            public readonly Msg HintKey;
 
-            public Rule(string pattern, ErrorCategory cat, string hint)
+            public Rule(string pattern, ErrorCategory cat, Msg hintKey)
             {
                 Rx = new Regex(pattern, RegexOptions.IgnoreCase | RegexOptions.Compiled);
                 Cat = cat;
-                Hint = hint;
+                HintKey = hintKey;
             }
         }
 
         private static readonly List<Rule> Rules = new List<Rule>
         {
             new Rule(@"No space left on device|errno\s*28", ErrorCategory.PathError,
-                "На диске закончилось место. Освободите место или выберите другую папку."),
+                Msg.HintNoSpace),
             new Rule(@"Permission denied|Access is denied", ErrorCategory.PathError,
-                "Нет прав на запись в выбранную папку. Выберите другую папку или проверьте права."),
+                Msg.HintNoWriteAccess),
             new Rule(@"Unable to (?:create|open) (?:directory|file)|The system cannot find the path", ErrorCategory.PathError,
-                "Не удалось создать или открыть папку назначения. Проверьте путь."),
+                Msg.HintDestCreateFail),
             new Rule(@"File ?name too long", ErrorCategory.PathError,
-                "Имя файла слишком длинное. Выберите папку с более коротким путём."),
+                Msg.HintFileNameTooLong),
 
             new Rule(@"Unsupported URL|is not a valid URL", ErrorCategory.InvalidUrl,
-                "Ссылка не распознана как поддерживаемая. Убедитесь, что скопирована ссылка YouTube."),
+                Msg.HintUnsupportedUrl),
 
             new Rule(@"Unable to extract|Failed to extract", ErrorCategory.UpdateSuspect,
-                "YouTube изменил страницу/структуру данных. Возможная проблема версии yt-dlp — точно установить причину нельзя."),
+                Msg.HintExtractFail),
             new Rule(@"nsig extraction failed|Signature extraction failed", ErrorCategory.UpdateSuspect,
-                "Не удалось расшифровать подпись (nsig). Возможная проблема версии yt-dlp — точно установить причину нельзя."),
+                Msg.HintNsigFail),
             new Rule(@"Requested format is not available", ErrorCategory.UpdateSuspect,
-                "Требуемый формат недоступен. Возможная проблема версии yt-dlp — точно установить причину нельзя."),
+                Msg.HintFormatUnavailable),
             new Rule(@"Sign in to confirm you.re not a bot", ErrorCategory.UpdateSuspect,
-                "YouTube требует подтверждения «не робот». Возможная проблема версии yt-dlp — обновление может помочь, но не гарантировано."),
+                Msg.HintBotCheck),
             new Rule(@"Precondition check failed|HTTP Error 403", ErrorCategory.UpdateSuspect,
-                "Запрос отклонён (403). Возможная проблема версии yt-dlp — точно установить причину нельзя."),
+                Msg.HintHttp403),
 
             new Rule(@"unable to download (?:video|audio) data|getaddrinfo failed|Temporary failure in name resolution|Connection (?:reset|refused)|timed out|Network is unreachable|SSL: CERTIFICATE", ErrorCategory.Network,
-                "Проблема с сетью или доступом к YouTube. Проверьте интернет-соединение и попробуйте позже. Обновление yt-dlp не требуется."),
+                Msg.HintNetwork),
             new Rule(@"HTTP Error 5\d\d", ErrorCategory.Network,
-                "Сервер YouTube временно недоступен (ошибка 5xx). Попробуйте позже. Обновление yt-dlp не требуется."),
+                Msg.HintServer5xx),
 
             new Rule(@"Private video", ErrorCategory.ContentUnavailable,
-                "Видео приватное — скачать его нельзя."),
+                Msg.HintPrivateVideo),
             new Rule(@"Video unavailable|This video is unavailable|removed by the uploader", ErrorCategory.ContentUnavailable,
-                "Видео недоступно или удалено."),
+                Msg.HintVideoUnavailable),
             new Rule(@"members[- ]only|Join this channel", ErrorCategory.ContentUnavailable,
-                "Видео доступно только участникам канала."),
+                Msg.HintMembersOnly),
             new Rule(@"Sign in to confirm your age|confirm your age|age.?restricted", ErrorCategory.ContentUnavailable,
-                "Возрастное ограничение: требуется вход в аккаунт."),
+                Msg.HintAgeRestricted),
             new Rule(@"not available in your country|blocked it in your country", ErrorCategory.ContentUnavailable,
-                "Видео заблокировано в вашем регионе."),
+                Msg.HintGeoBlocked),
         };
 
         public class Result
         {
             public ErrorCategory Category;
-            public string Hint;
+            public Msg? HintKey;
             public string MatchedLine;
         }
 
@@ -83,17 +83,17 @@ namespace YouTubeDownloader
         {
             if (exitCode == 0) return null;
             if (string.IsNullOrEmpty(output))
-                return new Result { Category = ErrorCategory.Unknown, Hint = null, MatchedLine = null };
+                return new Result { Category = ErrorCategory.Unknown, HintKey = null, MatchedLine = null };
 
             foreach (Rule r in Rules)
             {
                 Match m = r.Rx.Match(output);
                 if (m.Success)
                 {
-                    return new Result { Category = r.Cat, Hint = r.Hint, MatchedLine = ExtractLine(output, m.Index) };
+                    return new Result { Category = r.Cat, HintKey = r.HintKey, MatchedLine = ExtractLine(output, m.Index) };
                 }
             }
-            return new Result { Category = ErrorCategory.Unknown, Hint = null, MatchedLine = LastErrorLine(output) };
+            return new Result { Category = ErrorCategory.Unknown, HintKey = null, MatchedLine = LastErrorLine(output) };
         }
 
         private static string ExtractLine(string text, int index)

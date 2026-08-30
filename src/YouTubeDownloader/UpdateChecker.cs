@@ -30,7 +30,7 @@ namespace YouTubeDownloader
                 {
                     string json = sr.ReadToEnd();
                     Match m = Regex.Match(json, "\"tag_name\"\\s*:\\s*\"([^\"]+)\"");
-                    if (!m.Success) throw new Exception("Неожиданный ответ GitHub API.");
+                    if (!m.Success) throw new Exception("Unexpected GitHub API response.");
                     return m.Groups[1].Value;
                 }
             }));
