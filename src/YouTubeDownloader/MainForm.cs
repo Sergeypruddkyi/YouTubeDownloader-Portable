@@ -12,6 +12,13 @@ namespace YouTubeDownloader
 {
     internal static class Theme
     {
+        public const float BaseSize = 10.5F;
+
+        public static readonly Font Regular = new Font("Segoe UI", BaseSize);
+        public static readonly Font BoldStatus = new Font("Segoe UI", BaseSize, FontStyle.Bold);
+        public static readonly Font Log = new Font("Consolas", BaseSize);
+        public static readonly Font Big = new Font("Segoe UI", BaseSize + 1.5F, FontStyle.Bold);
+
         public static readonly Color Back = Color.FromArgb(30, 30, 30);
         public static readonly Color Input = Color.FromArgb(45, 45, 48);
         public static readonly Color Button = Color.FromArgb(51, 51, 55);
@@ -23,9 +30,6 @@ namespace YouTubeDownloader
         public static readonly Color Red = Color.FromArgb(255, 107, 107);
         public static readonly Color Orange = Color.FromArgb(255, 184, 77);
         public static readonly Color Accent = Color.FromArgb(0, 120, 212);
-
-        public static readonly Font BoldStatus = new Font("Segoe UI", 10F, FontStyle.Bold);
-        public static readonly Font Regular = new Font("Segoe UI", 9F);
 
         public static void StyleButton(Button b)
         {
@@ -60,8 +64,8 @@ namespace YouTubeDownloader
         private const string AnsUpdate = "Обновить";
         private const string AnsCancel = "Отмена";
 
-        private const int CollapsedHeight = 300;
-        private const int ExpandedHeight = 508;
+        private const int CollapsedHeight = 310;
+        private const int ExpandedHeight = 530;
 
         private readonly Settings _settings = new Settings(AppPaths.SettingsPath);
 
@@ -103,10 +107,10 @@ namespace YouTubeDownloader
         public MainForm()
         {
             Text = "YouTube Downloader";
-            Font = new Font("Segoe UI", 9F);
+            Font = Theme.Regular;
             BackColor = Theme.Back;
             ClientSize = new Size(790, CollapsedHeight);
-            MinimumSize = new Size(700, 320);
+            MinimumSize = new Size(700, 330);
             StartPosition = FormStartPosition.CenterScreen;
             FormClosing += OnFormClosing;
             BuildUi();
@@ -116,14 +120,14 @@ namespace YouTubeDownloader
         {
             Label l1 = new Label();
             l1.Text = "Ссылка:";
-            l1.Location = new Point(12, 17);
-            l1.Size = new Size(58, 20);
+            l1.Location = new Point(12, 18);
+            l1.Size = new Size(58, 22);
             l1.ForeColor = Theme.Light;
             Controls.Add(l1);
 
             txtUrl = new TextBox();
-            txtUrl.Location = new Point(75, 14);
-            txtUrl.Size = new Size(600, 23);
+            txtUrl.Location = new Point(75, 15);
+            txtUrl.Size = new Size(600, 26);
             txtUrl.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleInput(txtUrl);
             txtUrl.TextChanged += delegate { UpdateUrlStatus(); };
@@ -131,16 +135,16 @@ namespace YouTubeDownloader
 
             btnPaste = new Button();
             btnPaste.Text = "Вставить";
-            btnPaste.Location = new Point(680, 13);
-            btnPaste.Size = new Size(98, 25);
+            btnPaste.Location = new Point(680, 14);
+            btnPaste.Size = new Size(98, 28);
             btnPaste.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnPaste);
             btnPaste.Click += delegate { PasteFromClipboard(); };
             Controls.Add(btnPaste);
 
             lblTitle = new Label();
-            lblTitle.Location = new Point(75, 40);
-            lblTitle.Size = new Size(600, 16);
+            lblTitle.Location = new Point(75, 44);
+            lblTitle.Size = new Size(600, 18);
             lblTitle.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             lblTitle.ForeColor = Theme.Dim;
             lblTitle.AutoEllipsis = true;
@@ -149,14 +153,14 @@ namespace YouTubeDownloader
 
             Label l2 = new Label();
             l2.Text = "Папка:";
-            l2.Location = new Point(12, 78);
-            l2.Size = new Size(58, 20);
+            l2.Location = new Point(12, 73);
+            l2.Size = new Size(58, 22);
             l2.ForeColor = Theme.Light;
             Controls.Add(l2);
 
             txtFolder = new TextBox();
-            txtFolder.Location = new Point(75, 75);
-            txtFolder.Size = new Size(530, 23);
+            txtFolder.Location = new Point(75, 70);
+            txtFolder.Size = new Size(530, 26);
             txtFolder.ReadOnly = true;
             txtFolder.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             txtFolder.BackColor = Theme.Input;
@@ -166,23 +170,23 @@ namespace YouTubeDownloader
 
             btnBrowse = new Button();
             btnBrowse.Text = "Обзор…";
-            btnBrowse.Location = new Point(610, 74);
-            btnBrowse.Size = new Size(80, 25);
+            btnBrowse.Location = new Point(610, 69);
+            btnBrowse.Size = new Size(80, 28);
             btnBrowse.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnBrowse);
             btnBrowse.Click += delegate { BrowseFolder(); };
             Controls.Add(btnBrowse);
 
             lblYtStatus = new Label();
-            lblYtStatus.Location = new Point(75, 104);
-            lblYtStatus.Size = new Size(360, 20);
+            lblYtStatus.Location = new Point(75, 101);
+            lblYtStatus.Size = new Size(360, 18);
             lblYtStatus.ForeColor = Theme.Dim;
             Controls.Add(lblYtStatus);
 
             btnCheckUpdate = new Button();
             btnCheckUpdate.Text = "Проверить обновление yt-dlp";
-            btnCheckUpdate.Location = new Point(445, 101);
-            btnCheckUpdate.Size = new Size(233, 26);
+            btnCheckUpdate.Location = new Point(445, 98);
+            btnCheckUpdate.Size = new Size(233, 28);
             btnCheckUpdate.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnCheckUpdate);
             btnCheckUpdate.Click += async delegate { await RunUpdateFlowAsync(false); };
@@ -190,9 +194,9 @@ namespace YouTubeDownloader
 
             btnDownload = new Button();
             btnDownload.Text = "СКАЧАТЬ";
-            btnDownload.Font = new Font("Segoe UI", 11F, FontStyle.Bold);
-            btnDownload.Location = new Point(12, 135);
-            btnDownload.Size = new Size(370, 44);
+            btnDownload.Font = Theme.Big;
+            btnDownload.Location = new Point(12, 134);
+            btnDownload.Size = new Size(370, 48);
             btnDownload.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleAccent(btnDownload);
             btnDownload.Click += async delegate { await StartDownloadAsync(); };
@@ -201,8 +205,8 @@ namespace YouTubeDownloader
 
             btnCancel = new Button();
             btnCancel.Text = "Отмена";
-            btnCancel.Location = new Point(392, 135);
-            btnCancel.Size = new Size(120, 44);
+            btnCancel.Location = new Point(392, 134);
+            btnCancel.Size = new Size(120, 48);
             btnCancel.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnCancel.Enabled = false;
             Theme.StyleButton(btnCancel);
@@ -211,8 +215,8 @@ namespace YouTubeDownloader
 
             btnOpenFolder = new Button();
             btnOpenFolder.Text = "Открыть папку";
-            btnOpenFolder.Location = new Point(522, 135);
-            btnOpenFolder.Size = new Size(256, 44);
+            btnOpenFolder.Location = new Point(522, 134);
+            btnOpenFolder.Size = new Size(256, 48);
             btnOpenFolder.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnOpenFolder.Enabled = false;
             Theme.StyleButton(btnOpenFolder);
@@ -220,21 +224,21 @@ namespace YouTubeDownloader
             Controls.Add(btnOpenFolder);
 
             pb = new ProgressBar();
-            pb.Location = new Point(12, 196);
-            pb.Size = new Size(766, 22);
+            pb.Location = new Point(12, 192);
+            pb.Size = new Size(766, 24);
             pb.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             Controls.Add(pb);
 
             lblProgress = new Label();
-            lblProgress.Location = new Point(12, 222);
-            lblProgress.Size = new Size(766, 16);
+            lblProgress.Location = new Point(12, 220);
+            lblProgress.Size = new Size(766, 18);
             lblProgress.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             lblProgress.ForeColor = Theme.Light;
             Controls.Add(lblProgress);
 
             lblInfo = new Label();
             lblInfo.Location = new Point(12, 240);
-            lblInfo.Size = new Size(640, 16);
+            lblInfo.Size = new Size(640, 18);
             lblInfo.Anchor = AnchorStyles.Left | AnchorStyles.Top;
             lblInfo.ForeColor = Theme.Dim;
             Controls.Add(lblInfo);
@@ -242,20 +246,20 @@ namespace YouTubeDownloader
             btnLogToggle = new Button();
             btnLogToggle.Text = "Показать лог";
             btnLogToggle.Location = new Point(656, 238);
-            btnLogToggle.Size = new Size(122, 25);
+            btnLogToggle.Size = new Size(122, 28);
             btnLogToggle.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnLogToggle);
             btnLogToggle.Click += delegate { ToggleLog(); };
             Controls.Add(btnLogToggle);
 
             txtLog = new TextBox();
-            txtLog.Location = new Point(12, 268);
-            txtLog.Size = new Size(766, 207);
+            txtLog.Location = new Point(12, 270);
+            txtLog.Size = new Size(766, 205);
             txtLog.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom;
             txtLog.Multiline = true;
             txtLog.ReadOnly = true;
             txtLog.ScrollBars = ScrollBars.Vertical;
-            txtLog.Font = new Font("Consolas", 9F);
+            txtLog.Font = Theme.Log;
             txtLog.WordWrap = false;
             txtLog.Visible = false;
             txtLog.BackColor = Theme.Back;
@@ -264,10 +268,10 @@ namespace YouTubeDownloader
             Controls.Add(txtLog);
 
             lblStatus = new Label();
-            lblStatus.Location = new Point(12, 483);
-            lblStatus.Size = new Size(766, 18);
+            lblStatus.Location = new Point(12, 505);
+            lblStatus.Size = new Size(766, 20);
             lblStatus.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
-            lblStatus.Font = new Font("Segoe UI", 9F, FontStyle.Bold);
+            lblStatus.Font = Theme.BoldStatus;
             lblStatus.AutoEllipsis = true;
             lblStatus.ForeColor = Theme.Dim;
             lblStatus.Text = "Готово.";
@@ -279,7 +283,7 @@ namespace YouTubeDownloader
             _logVisible = !_logVisible;
             txtLog.Visible = _logVisible;
             btnLogToggle.Text = _logVisible ? "Скрыть лог" : "Показать лог";
-            MinimumSize = _logVisible ? new Size(700, 520) : new Size(700, 320);
+            MinimumSize = _logVisible ? new Size(700, 540) : new Size(700, 330);
             ClientSize = _logVisible ? new Size(790, ExpandedHeight) : new Size(790, CollapsedHeight);
         }
 
