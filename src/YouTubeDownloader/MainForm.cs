@@ -116,6 +116,8 @@ namespace YouTubeDownloader
             _settings.Load();
             L10n.SetFromSetting(_settings.Language);
             Text = "YouTube Downloader";
+            try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
+            catch { }
             Font = Theme.Regular;
             BackColor = Theme.Back;
             ClientSize = new Size(790, CollapsedHeight);
