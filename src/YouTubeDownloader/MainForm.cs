@@ -68,9 +68,8 @@ namespace YouTubeDownloader
         private TextBox txtUrl;
         private TextBox txtFolder;
         private TextBox txtLog;
-        private Label lblUrlStatus;
-        private Label lblYtStatus;
         private Label lblTitle;
+        private Label lblYtStatus;
         private Label lblProgress;
         private Label lblInfo;
         private Label lblStatus;
@@ -87,7 +86,8 @@ namespace YouTubeDownloader
         private readonly Timer _titleTimer = new Timer();
         private bool _logVisible;
         private string _lastAutoUrl;
-        private string _lastTitleUrl;
+        private string _titleForUrl;
+        private string _titleValue;
         private int _titleSeq;
         private Process _proc;
         private volatile bool _downloading;
@@ -138,20 +138,13 @@ namespace YouTubeDownloader
             btnPaste.Click += delegate { PasteFromClipboard(); };
             Controls.Add(btnPaste);
 
-            lblUrlStatus = new Label();
-            lblUrlStatus.Location = new Point(75, 40);
-            lblUrlStatus.Size = new Size(600, 16);
-            lblUrlStatus.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-            lblUrlStatus.ForeColor = Theme.Dim;
-            lblUrlStatus.Text = "Ожидание ссылки — скопируйте URL YouTube или введите вручную";
-            Controls.Add(lblUrlStatus);
-
             lblTitle = new Label();
-            lblTitle.Location = new Point(75, 57);
-            lblTitle.Size = new Size(600, 15);
+            lblTitle.Location = new Point(75, 40);
+            lblTitle.Size = new Size(600, 16);
             lblTitle.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
-            lblTitle.ForeColor = Theme.Light;
+            lblTitle.ForeColor = Theme.Dim;
             lblTitle.AutoEllipsis = true;
+            lblTitle.Text = "Ожидание ссылки — скопируйте URL YouTube или введите вручную";
             Controls.Add(lblTitle);
 
             Label l2 = new Label();
@@ -425,23 +418,29 @@ namespace YouTubeDownloader
             string t = txtUrl.Text.Trim();
             if (t.Length == 0)
             {
-                lblUrlStatus.Text = "Ожидание ссылки — скопируйте URL YouTube или введите вручную";
-                lblUrlStatus.ForeColor = Theme.Dim;
-                lblTitle.Text = "";
+                lblTitle.Text = "Ожидание ссылки — скопируйте URL YouTube или введите вручную";
+                lblTitle.ForeColor = Theme.Dim;
                 _titleTimer.Stop();
             }
             else if (YouTubeUrl.IsValid(t))
             {
-                lblUrlStatus.Text = "YouTube-ссылка распознана";
-                lblUrlStatus.ForeColor = Theme.Green;
+                if (t == _titleForUrl && _titleValue != null)
+                {
+                    lblTitle.Text = "Название: " + _titleValue;
+                    lblTitle.ForeColor = Theme.Light;
+                }
+                else
+                {
+                    lblTitle.Text = "Получение названия…";
+                    lblTitle.ForeColor = Theme.Dim;
+                }
                 _titleTimer.Stop();
                 _titleTimer.Start();
             }
             else
             {
-                lblUrlStatus.Text = "Не похоже на YouTube-ссылку";
-                lblUrlStatus.ForeColor = Theme.Orange;
-                lblTitle.Text = "";
+                lblTitle.Text = "Не похоже на YouTube-ссылку";
+                lblTitle.ForeColor = Theme.Orange;
                 _titleTimer.Stop();
             }
         }
@@ -450,8 +449,12 @@ namespace YouTubeDownloader
         {
             if (_downloading || _updateRunning) return;
             if (!YouTubeUrl.IsValid(url)) return;
-            if (url == _lastTitleUrl) return;
-            _lastTitleUrl = url;
+            if (url == _titleForUrl)
+            {
+                lblTitle.Text = "Название: " + _titleValue;
+                lblTitle.ForeColor = Theme.Light;
+                return;
+            }
             int seq = ++_titleSeq;
             lblTitle.Text = "Получение названия…";
             lblTitle.ForeColor = Theme.Dim;
@@ -464,6 +467,8 @@ namespace YouTubeDownloader
                     if (seq != _titleSeq) return;
                     if (ok && !string.IsNullOrEmpty(title))
                     {
+                        _titleForUrl = url;
+                        _titleValue = title;
                         lblTitle.Text = "Название: " + title;
                         lblTitle.ForeColor = Theme.Light;
                     }
