@@ -1,6 +1,6 @@
-# YouTube Downloader
+# YouTube Downloader Portable
 
-A simple portable Windows GUI for yt-dlp.
+YouTube Downloader Portable — a simple, lightweight, portable Windows GUI for [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 Download YouTube videos without using the command line.
 
 ![YouTube Downloader screenshot](assets/YouTubeDownloader.png)
@@ -22,13 +22,11 @@ Download YouTube videos without using the command line.
 
 ## Download
 
-1. Download the latest release.
+1. Download the latest release from the [GitHub Releases page](https://github.com/Sergeypruddkyi/YouTubeDownloader-Portable/releases/latest).
 2. Extract the portable archive.
 3. Run `YouTubeDownloader.exe`.
 
 No installation required.
-
-> Latest releases will be available on the GitHub Releases page.
 
 Requires Windows 10 or newer (x64).
 
@@ -61,8 +59,8 @@ simply pick a new folder with **Browse**.
 Clone this repository and run the build script:
 
 ```
-git clone <repository-url>
-cd YouTubeDownloader
+git clone https://github.com/Sergeypruddkyi/YouTubeDownloader-Portable.git
+cd YouTubeDownloader-Portable
 .\src\YouTubeDownloader\build.ps1
 ```
 
