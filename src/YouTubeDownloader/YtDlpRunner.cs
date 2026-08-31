@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
@@ -24,6 +25,7 @@ namespace YouTubeDownloader
         private static readonly Regex RxSpeed = new Regex(@"at\s+(?<s>[\d.]+\s*[KMGT]?i?B/s|Unknown\s+B/s)", RegexOptions.Compiled);
         private static readonly Regex RxEta = new Regex(@"ETA\s+(?<e>\d+:\d\d)", RegexOptions.Compiled);
         private static readonly Regex RxDest = new Regex(@"\[download\]\s+Destination:\s+(?<f>.+)", RegexOptions.Compiled);
+        private static readonly Regex RxExtractDest = new Regex(@"\[ExtractAudio\]\s+Destination:\s+(?<f>.+)", RegexOptions.Compiled);
         private static readonly Regex RxAlready = new Regex(@"has already been downloaded", RegexOptions.Compiled);
         private static readonly Regex RxMerger = new Regex(@"\[Merger\]\s+Merging formats into ""(?<f>.+)""", RegexOptions.Compiled);
 
@@ -54,6 +56,12 @@ namespace YouTubeDownloader
             return m.Success ? m.Groups["f"].Value.Trim() : null;
         }
 
+        public static string TryExtractAudioDestination(string line)
+        {
+            Match m = RxExtractDest.Match(line);
+            return m.Success ? m.Groups["f"].Value.Trim() : null;
+        }
+
         public static string TryMergedFile(string line)
         {
             Match m = RxMerger.Match(line);
@@ -75,8 +83,45 @@ namespace YouTubeDownloader
         }
     }
 
+    public enum DownloadQuality
+    {
+        BestAvailable,
+        P1080,
+        P720,
+        P480,
+        P360,
+        AudioOnly
+    }
+
     public static class YtDlpRunner
     {
+        public static DownloadQuality ParseQuality(string value)
+        {
+            if (value == null) return DownloadQuality.BestAvailable;
+            string v = value.Trim();
+            if (v.Length == 0) return DownloadQuality.BestAvailable;
+            if (string.Equals(v, "best", StringComparison.OrdinalIgnoreCase)) return DownloadQuality.BestAvailable;
+            if (string.Equals(v, "1080", StringComparison.OrdinalIgnoreCase)) return DownloadQuality.P1080;
+            if (string.Equals(v, "720", StringComparison.OrdinalIgnoreCase)) return DownloadQuality.P720;
+            if (string.Equals(v, "480", StringComparison.OrdinalIgnoreCase)) return DownloadQuality.P480;
+            if (string.Equals(v, "360", StringComparison.OrdinalIgnoreCase)) return DownloadQuality.P360;
+            if (string.Equals(v, "audio", StringComparison.OrdinalIgnoreCase)) return DownloadQuality.AudioOnly;
+            return DownloadQuality.BestAvailable;
+        }
+
+        public static string QualityToSetting(DownloadQuality mode)
+        {
+            switch (mode)
+            {
+                case DownloadQuality.P1080: return "1080";
+                case DownloadQuality.P720: return "720";
+                case DownloadQuality.P480: return "480";
+                case DownloadQuality.P360: return "360";
+                case DownloadQuality.AudioOnly: return "audio";
+                default: return "best";
+            }
+        }
+
         public static string Quote(string arg)
         {
             if (arg == null) arg = "";
@@ -149,24 +194,61 @@ namespace YouTubeDownloader
             return psi;
         }
 
-        public static string[] DownloadArgs(string folder, string url)
+        public static string[] DownloadArgs(string folder, string url, DownloadQuality mode)
         {
             string escaped = folder.Replace("%", "%%");
             if (!escaped.EndsWith("\\")) escaped += "\\";
             string outTemplate = escaped + "%(title)s.%(ext)s";
-            return new[]
+            List<string> args = new List<string>
             {
                 "--newline",
                 "--color", "no_color",
                 "--encoding", "utf-8",
                 "--ignore-config",
-                "--js-runtime", "deno",
-                "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-                "--merge-output-format", "mp4",
-                "--ffmpeg-location", AppPaths.FfmpegExe,
-                "-o", outTemplate,
-                url
+                "--no-playlist",
+                "--js-runtime", "deno"
             };
+            switch (mode)
+            {
+                case DownloadQuality.AudioOnly:
+                    args.Add("-f");
+                    args.Add("bestaudio[ext=m4a]/bestaudio/best");
+                    args.Add("-x");
+                    args.Add("--audio-format");
+                    args.Add("best");
+                    break;
+                case DownloadQuality.P1080:
+                case DownloadQuality.P720:
+                case DownloadQuality.P480:
+                case DownloadQuality.P360:
+                    int h = mode == DownloadQuality.P1080 ? 1080
+                        : mode == DownloadQuality.P720 ? 720
+                        : mode == DownloadQuality.P480 ? 480 : 360;
+                    args.Add("-f");
+                    args.Add(HeightCappedFormat(h));
+                    args.Add("--merge-output-format");
+                    args.Add("mp4");
+                    break;
+                default:
+                    args.Add("-f");
+                    args.Add("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best");
+                    args.Add("--merge-output-format");
+                    args.Add("mp4");
+                    break;
+            }
+            args.Add("--ffmpeg-location");
+            args.Add(AppPaths.FfmpegExe);
+            args.Add("-o");
+            args.Add(outTemplate);
+            args.Add(url);
+            return args.ToArray();
+        }
+
+        private static string HeightCappedFormat(int h)
+        {
+            return "bestvideo[height<=" + h + "][ext=mp4]+bestaudio[ext=m4a]"
+                 + "/bestvideo[height<=" + h + "]+bestaudio"
+                 + "/best[height<=" + h + "]";
         }
 
         public static string[] UpdateArgs()

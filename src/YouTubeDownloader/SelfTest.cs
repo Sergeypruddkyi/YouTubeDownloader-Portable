@@ -60,8 +60,12 @@ namespace YouTubeDownloader
             Check("yt.exe --version", code == 0 && !string.IsNullOrEmpty(ver), ver);
 
             TestSettings();
+            TestQualitySettings();
             TestUrlValidator();
             TestQuoting();
+            TestDownloadArgs();
+            TestParseQuality();
+            TestOutputParser();
             TestClassifier();
             TestInvalidUrlRun();
 
@@ -141,6 +145,180 @@ namespace YouTubeDownloader
             {
                 Check("settings.ini запись/чтение", false, ex.Message);
             }
+        }
+
+        private static void TestQualitySettings()
+        {
+            try
+            {
+                Settings st = new Settings(AppPaths.SettingsPath);
+                st.Quality = DownloadQuality.P720;
+                st.Save();
+                Settings st2 = new Settings(AppPaths.SettingsPath);
+                st2.Load();
+                bool ok720 = st2.Quality == DownloadQuality.P720 && string.Equals(st2.Get("Quality"), "720", StringComparison.Ordinal);
+
+                st.Quality = DownloadQuality.AudioOnly;
+                st.Save();
+                Settings st3 = new Settings(AppPaths.SettingsPath);
+                st3.Load();
+                bool okAudio = st3.Quality == DownloadQuality.AudioOnly;
+
+                File.WriteAllText(AppPaths.SettingsPath, "[General]\r\nQuality=some-garbage\r\n", new UTF8Encoding(false));
+                Settings st4 = new Settings(AppPaths.SettingsPath);
+                st4.Load();
+                bool okFallback = st4.Quality == DownloadQuality.BestAvailable;
+
+                Settings st5 = new Settings(AppPaths.SettingsPath);
+                st5.Load();
+                bool okMissing = st5.Quality == DownloadQuality.BestAvailable;
+
+                Check("settings.ini Quality (round-trip + fallback)", ok720 && okAudio && okFallback && okMissing, AppPaths.SettingsPath);
+                try { File.Delete(AppPaths.SettingsPath); }
+                catch { }
+            }
+            catch (Exception ex)
+            {
+                Check("settings.ini Quality (round-trip + fallback)", false, ex.Message);
+            }
+        }
+
+        private static void TestDownloadArgs()
+        {
+            string folder = "C:\\__selftest__";
+            string url = "https://youtu.be/dQw4w9WgXcQ";
+            string template = "C:\\__selftest__\\%(title)s.%(ext)s";
+            try
+            {
+                string[] best = YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.BestAvailable);
+                string[] expectedBest = new[]
+                {
+                    "--newline", "--color", "no_color", "--encoding", "utf-8", "--ignore-config", "--no-playlist", "--js-runtime", "deno",
+                    "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
+                    "--merge-output-format", "mp4",
+                    "--ffmpeg-location", AppPaths.FfmpegExe,
+                    "-o", template,
+                    url
+                };
+                Check("DownloadArgs BestAvailable == v1.0.1 + --no-playlist", SeqEqual(best, expectedBest), null);
+
+                bool capsOk =
+                    FormatIs(YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.P1080), "bestvideo[height<=1080][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=1080]+bestaudio/best[height<=1080]") &&
+                    FormatIs(YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.P720), "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]") &&
+                    FormatIs(YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.P480), "bestvideo[height<=480][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=480]+bestaudio/best[height<=480]") &&
+                    FormatIs(YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.P360), "bestvideo[height<=360][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=360]+bestaudio/best[height<=360]");
+                Check("DownloadArgs height caps 1080/720/480/360", capsOk, null);
+
+                string[] a1080 = YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.P1080);
+                bool capFlags = Contains(a1080, "--merge-output-format") && NextIs(a1080, "--merge-output-format", "mp4")
+                    && Contains(a1080, "--ffmpeg-location") && !Contains(a1080, "-x");
+                Check("DownloadArgs cap flags (merge mp4, ffmpeg, без -x)", capFlags, null);
+
+                string[] audio = YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.AudioOnly);
+                bool audioOk = NextIs(audio, "-f", "bestaudio[ext=m4a]/bestaudio/best")
+                    && Contains(audio, "-x")
+                    && NextIs(audio, "--audio-format", "best")
+                    && !Contains(audio, "--merge-output-format")
+                    && Contains(audio, "--ffmpeg-location");
+                Check("DownloadArgs AudioOnly (bestaudio, -x, без merge в mp4)", audioOk, null);
+
+                bool noPlaylistAll =
+                    Contains(best, "--no-playlist") &&
+                    Contains(a1080, "--no-playlist") &&
+                    Contains(YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.P720), "--no-playlist") &&
+                    Contains(YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.P480), "--no-playlist") &&
+                    Contains(YtDlpRunner.DownloadArgs(folder, url, DownloadQuality.P360), "--no-playlist") &&
+                    Contains(audio, "--no-playlist");
+                Check("DownloadArgs --no-playlist во всех 6 режимах", noPlaylistAll, null);
+
+                string playlistUrl = "https://www.youtube.com/watch?v=dQw4w9WgXcQ&list=PLrAXtmErZgOeiKm4sgNOknGvNjby9efdf";
+                string[] plArgs = YtDlpRunner.DownloadArgs(folder, playlistUrl, DownloadQuality.P720);
+                bool playlistRegression =
+                    Contains(plArgs, "--no-playlist") &&
+                    string.Equals(plArgs[plArgs.Length - 1], playlistUrl, StringComparison.Ordinal) &&
+                    NextIs(plArgs, "-f", "bestvideo[height<=720][ext=mp4]+bestaudio[ext=m4a]/bestvideo[height<=720]+bestaudio/best[height<=720]");
+                Check("DownloadArgs URL с list= → только видео (--no-playlist, mode сохранён)", playlistRegression, null);
+            }
+            catch (Exception ex)
+            {
+                Check("DownloadArgs", false, ex.Message);
+            }
+        }
+
+        private static void TestParseQuality()
+        {
+            bool fallbackOk =
+                YtDlpRunner.ParseQuality(null) == DownloadQuality.BestAvailable &&
+                YtDlpRunner.ParseQuality("") == DownloadQuality.BestAvailable &&
+                YtDlpRunner.ParseQuality("   ") == DownloadQuality.BestAvailable &&
+                YtDlpRunner.ParseQuality("garbage") == DownloadQuality.BestAvailable &&
+                YtDlpRunner.ParseQuality("BEST") == DownloadQuality.BestAvailable &&
+                YtDlpRunner.ParseQuality("bеst") == DownloadQuality.BestAvailable;
+
+            bool valuesOk =
+                YtDlpRunner.ParseQuality("1080") == DownloadQuality.P1080 &&
+                YtDlpRunner.ParseQuality(" 720 ") == DownloadQuality.P720 &&
+                YtDlpRunner.ParseQuality("480") == DownloadQuality.P480 &&
+                YtDlpRunner.ParseQuality("360") == DownloadQuality.P360 &&
+                YtDlpRunner.ParseQuality("AUDIO") == DownloadQuality.AudioOnly;
+
+            bool roundTrip =
+                YtDlpRunner.ParseQuality(YtDlpRunner.QualityToSetting(DownloadQuality.BestAvailable)) == DownloadQuality.BestAvailable &&
+                YtDlpRunner.ParseQuality(YtDlpRunner.QualityToSetting(DownloadQuality.P1080)) == DownloadQuality.P1080 &&
+                YtDlpRunner.ParseQuality(YtDlpRunner.QualityToSetting(DownloadQuality.P720)) == DownloadQuality.P720 &&
+                YtDlpRunner.ParseQuality(YtDlpRunner.QualityToSetting(DownloadQuality.P480)) == DownloadQuality.P480 &&
+                YtDlpRunner.ParseQuality(YtDlpRunner.QualityToSetting(DownloadQuality.P360)) == DownloadQuality.P360 &&
+                YtDlpRunner.ParseQuality(YtDlpRunner.QualityToSetting(DownloadQuality.AudioOnly)) == DownloadQuality.AudioOnly;
+
+            Check("ParseQuality unknown/missing → BestAvailable", fallbackOk, null);
+            Check("ParseQuality значения режимов + round-trip", valuesOk && roundTrip, null);
+        }
+
+        private static void TestOutputParser()
+        {
+            string ex = OutputParser.TryExtractAudioDestination("[ExtractAudio] Destination: C:\\Музыка\\Song.m4a");
+            bool extractOk = string.Equals(ex, "C:\\Музыка\\Song.m4a", StringComparison.Ordinal);
+
+            bool phaseOk = OutputParser.PhaseOf("[ExtractAudio] Destination: C:\\x\\y.m4a") == Msg.PhaseMerging;
+
+            bool notConfused =
+                OutputParser.TryExtractAudioDestination("[download] Destination: C:\\x\\y.mp4") == null &&
+                OutputParser.TryDestination("[ExtractAudio] Destination: C:\\x\\y.m4a") == null;
+
+            string dl = OutputParser.TryDestination("[download] Destination: C:\\Видео\\clip.f137.mp4");
+            bool downloadOk = string.Equals(dl, "C:\\Видео\\clip.f137.mp4", StringComparison.Ordinal)
+                && OutputParser.PhaseOf("[download] Destination: C:\\x\\y.mp4") == Msg.PhaseDownloading;
+
+            Check("OutputParser ExtractAudio Destination", extractOk && phaseOk && notConfused, null);
+            Check("OutputParser download Destination (регрессия)", downloadOk, null);
+        }
+
+        private static bool SeqEqual(string[] a, string[] b)
+        {
+            if (a == null || b == null || a.Length != b.Length) return false;
+            for (int i = 0; i < a.Length; i++)
+                if (!string.Equals(a[i], b[i], StringComparison.Ordinal)) return false;
+            return true;
+        }
+
+        private static bool Contains(string[] args, string value)
+        {
+            foreach (string s in args)
+                if (string.Equals(s, value, StringComparison.Ordinal)) return true;
+            return false;
+        }
+
+        private static bool NextIs(string[] args, string key, string value)
+        {
+            for (int i = 0; i < args.Length - 1; i++)
+                if (string.Equals(args[i], key, StringComparison.Ordinal))
+                    return string.Equals(args[i + 1], value, StringComparison.Ordinal);
+            return false;
+        }
+
+        private static bool FormatIs(string[] args, string expected)
+        {
+            return NextIs(args, "-f", expected);
         }
 
         private static void TestUrlValidator()

@@ -33,6 +33,12 @@ namespace YouTubeDownloader
             set { Set("Language", value); }
         }
 
+        public DownloadQuality Quality
+        {
+            get { return YtDlpRunner.ParseQuality(Get("Quality")); }
+            set { Set("Quality", YtDlpRunner.QualityToSetting(value)); }
+        }
+
         public string Get(string key)
         {
             string v;

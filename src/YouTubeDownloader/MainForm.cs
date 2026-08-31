@@ -57,8 +57,8 @@ namespace YouTubeDownloader
 
     public class MainForm : Form
     {
-        private const int CollapsedHeight = 368;
-        private const int ExpandedHeight = 561;
+        private const int CollapsedHeight = 400;
+        private const int ExpandedHeight = 593;
 
         private readonly Settings _settings = new Settings(AppPaths.SettingsPath);
 
@@ -67,6 +67,7 @@ namespace YouTubeDownloader
         private TextBox txtLog;
         private Label lblUrl;
         private Label lblFolder;
+        private Label lblQuality;
         private Label lblTitle;
         private Label lblYtStatus;
         private Label lblProgress;
@@ -81,6 +82,7 @@ namespace YouTubeDownloader
         private Button btnOpenFolder;
         private Button btnLogToggle;
         private ComboBox cboLang;
+        private ComboBox cboQuality;
         private Panel content;
         private DarkTitleBar titleBar;
 
@@ -104,6 +106,8 @@ namespace YouTubeDownloader
         private bool _ytVersionFailed;
         private string _missingComponent;
         private bool _ffprobeMissing;
+        private DownloadQuality _quality = DownloadQuality.BestAvailable;
+        private DownloadQuality _lastQuality = DownloadQuality.BestAvailable;
 
         private Msg _statusKey = Msg.StatusReady;
         private object[] _statusArgs = new object[0];
@@ -117,6 +121,7 @@ namespace YouTubeDownloader
         {
             _settings.Load();
             L10n.SetFromSetting(_settings.Language);
+            _quality = _settings.Quality;
             Text = "YouTube Downloader";
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); }
             catch { }
@@ -124,7 +129,7 @@ namespace YouTubeDownloader
             Font = Theme.Regular;
             BackColor = Theme.Back;
             ClientSize = new Size(790, CollapsedHeight);
-            MinimumSize = new Size(790, 368);
+            MinimumSize = new Size(790, CollapsedHeight);
             StartPosition = FormStartPosition.CenterScreen;
             FormClosing += OnFormClosing;
             BuildUi();
@@ -204,14 +209,30 @@ namespace YouTubeDownloader
             btnBrowse.Click += delegate { BrowseFolder(); };
             content.Controls.Add(btnBrowse);
 
+            lblQuality = new Label();
+            lblQuality.Location = new Point(12, 109);
+            lblQuality.Size = new Size(84, 24);
+            lblQuality.ForeColor = Theme.Light;
+            content.Controls.Add(lblQuality);
+
+            cboQuality = new ComboBox();
+            cboQuality.DropDownStyle = ComboBoxStyle.DropDownList;
+            cboQuality.Location = new Point(96, 106);
+            cboQuality.Size = new Size(220, 29);
+            cboQuality.Anchor = AnchorStyles.Left | AnchorStyles.Top;
+            cboQuality.BackColor = Theme.Input;
+            cboQuality.ForeColor = Theme.Light;
+            cboQuality.SelectedIndexChanged += delegate { OnQualityComboChanged(); };
+            content.Controls.Add(cboQuality);
+
             lblYtStatus = new Label();
-            lblYtStatus.Location = new Point(75, 108);
+            lblYtStatus.Location = new Point(75, 140);
             lblYtStatus.Size = new Size(290, 22);
             lblYtStatus.ForeColor = Theme.Dim;
             content.Controls.Add(lblYtStatus);
 
             btnCheckUpdate = new Button();
-            btnCheckUpdate.Location = new Point(460, 106);
+            btnCheckUpdate.Location = new Point(460, 138);
             btnCheckUpdate.Size = new Size(220, 30);
             btnCheckUpdate.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnCheckUpdate);
@@ -223,7 +244,7 @@ namespace YouTubeDownloader
             cboLang.Items.Add("English");
             cboLang.Items.Add("Русский");
             cboLang.SelectedIndex = L10n.Current == Lang.Ru ? 1 : 0;
-            cboLang.Location = new Point(688, 106);
+            cboLang.Location = new Point(688, 138);
             cboLang.Width = 90;
             cboLang.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             cboLang.BackColor = Theme.Input;
@@ -233,7 +254,7 @@ namespace YouTubeDownloader
 
             btnDownload = new Button();
             btnDownload.Font = Theme.Big;
-            btnDownload.Location = new Point(12, 142);
+            btnDownload.Location = new Point(12, 174);
             btnDownload.Size = new Size(370, 52);
             btnDownload.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             Theme.StyleAccent(btnDownload);
@@ -242,7 +263,7 @@ namespace YouTubeDownloader
             AcceptButton = btnDownload;
 
             btnCancel = new Button();
-            btnCancel.Location = new Point(392, 142);
+            btnCancel.Location = new Point(392, 174);
             btnCancel.Size = new Size(120, 52);
             btnCancel.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnCancel.Enabled = false;
@@ -251,7 +272,7 @@ namespace YouTubeDownloader
             content.Controls.Add(btnCancel);
 
             btnOpenFolder = new Button();
-            btnOpenFolder.Location = new Point(522, 142);
+            btnOpenFolder.Location = new Point(522, 174);
             btnOpenFolder.Size = new Size(256, 52);
             btnOpenFolder.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             btnOpenFolder.Enabled = false;
@@ -260,27 +281,27 @@ namespace YouTubeDownloader
             content.Controls.Add(btnOpenFolder);
 
             pb = new ProgressBar();
-            pb.Location = new Point(12, 202);
+            pb.Location = new Point(12, 234);
             pb.Size = new Size(766, 24);
             pb.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             content.Controls.Add(pb);
 
             lblProgress = new Label();
-            lblProgress.Location = new Point(12, 230);
+            lblProgress.Location = new Point(12, 262);
             lblProgress.Size = new Size(766, 22);
             lblProgress.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right;
             lblProgress.ForeColor = Theme.Light;
             content.Controls.Add(lblProgress);
 
             lblInfo = new Label();
-            lblInfo.Location = new Point(12, 254);
+            lblInfo.Location = new Point(12, 286);
             lblInfo.Size = new Size(640, 22);
             lblInfo.Anchor = AnchorStyles.Left | AnchorStyles.Top;
             lblInfo.ForeColor = Theme.Dim;
             content.Controls.Add(lblInfo);
 
             btnLogToggle = new Button();
-            btnLogToggle.Location = new Point(656, 252);
+            btnLogToggle.Location = new Point(656, 284);
             btnLogToggle.Size = new Size(122, 30);
             btnLogToggle.Anchor = AnchorStyles.Right | AnchorStyles.Top;
             Theme.StyleButton(btnLogToggle);
@@ -288,7 +309,7 @@ namespace YouTubeDownloader
             content.Controls.Add(btnLogToggle);
 
             txtLog = new TextBox();
-            txtLog.Location = new Point(12, 286);
+            txtLog.Location = new Point(12, 318);
             txtLog.Size = new Size(766, 196);
             txtLog.Anchor = AnchorStyles.Left | AnchorStyles.Top | AnchorStyles.Right | AnchorStyles.Bottom;
             txtLog.Multiline = true;
@@ -303,7 +324,7 @@ namespace YouTubeDownloader
             content.Controls.Add(txtLog);
 
             lblStatus = new Label();
-            lblStatus.Location = new Point(12, 487);
+            lblStatus.Location = new Point(12, 519);
             lblStatus.Size = new Size(766, 22);
             lblStatus.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Bottom;
             lblStatus.Font = Theme.BoldStatus;
@@ -319,8 +340,8 @@ namespace YouTubeDownloader
             // к expanded-контенту и возвращаем collapsed, иначе bottom-дистанции
             // снимаются с collapsed-высоты и статус оказывается вне окна
             content.Size = new Size(790, ExpandedHeight - DarkTitleBar.BarHeight);
-            txtLog.SetBounds(12, 286, 766, 196);
-            lblStatus.SetBounds(12, 487, 766, 22);
+            txtLog.SetBounds(12, 318, 766, 196);
+            lblStatus.SetBounds(12, 519, 766, 22);
             content.Size = new Size(790, CollapsedHeight - DarkTitleBar.BarHeight);
 
             ApplyStrings();
@@ -332,6 +353,8 @@ namespace YouTubeDownloader
         {
             lblUrl.Text = L10n.T(Msg.LabelUrl);
             lblFolder.Text = L10n.T(Msg.LabelFolder);
+            lblQuality.Text = L10n.T(Msg.LabelQuality);
+            ApplyQualityItems();
             btnPaste.Text = L10n.T(Msg.BtnPaste);
             btnBrowse.Text = L10n.T(Msg.BtnBrowse);
             btnCheckUpdate.Text = L10n.T(Msg.BtnCheckUpdate);
@@ -339,6 +362,55 @@ namespace YouTubeDownloader
             btnCancel.Text = L10n.T(Msg.BtnCancel);
             btnOpenFolder.Text = L10n.T(Msg.BtnOpenFolder);
             btnLogToggle.Text = L10n.T(_logVisible ? Msg.BtnHideLog : Msg.BtnShowLog);
+        }
+
+        private void ApplyQualityItems()
+        {
+            cboQuality.BeginUpdate();
+            cboQuality.Items.Clear();
+            cboQuality.Items.Add(L10n.T(Msg.QualityBest));
+            cboQuality.Items.Add(L10n.T(Msg.Quality1080));
+            cboQuality.Items.Add(L10n.T(Msg.Quality720));
+            cboQuality.Items.Add(L10n.T(Msg.Quality480));
+            cboQuality.Items.Add(L10n.T(Msg.Quality360));
+            cboQuality.Items.Add(L10n.T(Msg.QualityAudio));
+            cboQuality.EndUpdate();
+            cboQuality.SelectedIndex = QualityIndex(_quality);
+        }
+
+        private static int QualityIndex(DownloadQuality mode)
+        {
+            switch (mode)
+            {
+                case DownloadQuality.P1080: return 1;
+                case DownloadQuality.P720: return 2;
+                case DownloadQuality.P480: return 3;
+                case DownloadQuality.P360: return 4;
+                case DownloadQuality.AudioOnly: return 5;
+                default: return 0;
+            }
+        }
+
+        private static DownloadQuality ModeFromIndex(int index)
+        {
+            switch (index)
+            {
+                case 1: return DownloadQuality.P1080;
+                case 2: return DownloadQuality.P720;
+                case 3: return DownloadQuality.P480;
+                case 4: return DownloadQuality.P360;
+                case 5: return DownloadQuality.AudioOnly;
+                default: return DownloadQuality.BestAvailable;
+            }
+        }
+
+        private void OnQualityComboChanged()
+        {
+            DownloadQuality mode = ModeFromIndex(cboQuality.SelectedIndex);
+            if (mode == _quality) return;
+            _quality = mode;
+            _settings.Quality = mode;
+            _settings.Save();
         }
 
         private void OnLanguageComboChanged()
@@ -738,17 +810,18 @@ namespace YouTubeDownloader
                 return;
             }
 
-            string[] args = YtDlpRunner.DownloadArgs(folder, url);
-            await RunDownloadCoreAsync(args, true);
+            string[] args = YtDlpRunner.DownloadArgs(folder, url, _quality);
+            await RunDownloadCoreAsync(args, true, _quality);
         }
 
-        private async Task RunDownloadCoreAsync(string[] args, bool allowUpdateFlow)
+        private async Task RunDownloadCoreAsync(string[] args, bool allowUpdateFlow, DownloadQuality mode)
         {
             _downloading = true;
             _canceled = false;
             _alreadyDownloaded = false;
             _currentFile = null;
             _lastArgs = args;
+            _lastQuality = mode;
             SetBusy();
 
             pb.Value = 0;
@@ -792,14 +865,19 @@ namespace YouTubeDownloader
             }
 
             ErrorClassifier.Result cls = ErrorClassifier.Classify(result.Output, result.ExitCode);
-            ShowErrorResult(cls, result.Output, allowUpdateFlow);
+            ShowErrorResult(cls, result.Output, allowUpdateFlow, mode);
         }
 
-        private async void ShowErrorResult(ErrorClassifier.Result cls, string output, bool allowUpdateFlow)
+        private async void ShowErrorResult(ErrorClassifier.Result cls, string output, bool allowUpdateFlow, DownloadQuality mode)
         {
             string shortMsg;
             object shortArg;
-            if (cls != null && cls.HintKey.HasValue)
+            if (cls != null && cls.HintKey == Msg.HintFormatUnavailable && mode != DownloadQuality.BestAvailable)
+            {
+                shortMsg = L10n.T(Msg.HintQualityUnavailable);
+                shortArg = Msg.HintQualityUnavailable;
+            }
+            else if (cls != null && cls.HintKey.HasValue)
             {
                 shortMsg = L10n.T(cls.HintKey.Value);
                 shortArg = cls.HintKey.Value;
@@ -936,7 +1014,7 @@ namespace YouTubeDownloader
                     {
                         _autoRetried = true;
                         AppendLog(L10n.T(Msg.StatusRetrying));
-                        await RunDownloadCoreAsync(_lastArgs, false);
+                        await RunDownloadCoreAsync(_lastArgs, false, _lastQuality);
                     }
                 }
                 else
@@ -982,6 +1060,13 @@ namespace YouTubeDownloader
             {
                 _currentFile = merged;
                 SetInfo(Msg.InfoMergingFile, Path.GetFileName(merged));
+            }
+
+            string extracted = OutputParser.TryExtractAudioDestination(line.Text);
+            if (extracted != null)
+            {
+                _currentFile = extracted;
+                SetInfo(Msg.InfoExtractingFile, Path.GetFileName(extracted));
             }
 
             if (OutputParser.IsAlreadyDownloaded(line.Text)) _alreadyDownloaded = true;

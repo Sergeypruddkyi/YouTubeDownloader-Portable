@@ -13,6 +13,13 @@ namespace YouTubeDownloader
     {
         LabelUrl,
         LabelFolder,
+        LabelQuality,
+        QualityBest,
+        Quality1080,
+        Quality720,
+        Quality480,
+        Quality360,
+        QualityAudio,
         BtnPaste,
         BtnBrowse,
         BtnCheckUpdate,
@@ -47,6 +54,7 @@ namespace YouTubeDownloader
         InfoPreparing,
         InfoDownloadingFile,
         InfoMergingFile,
+        InfoExtractingFile,
 
         ProgressComplete,
         ProgressAlready,
@@ -112,7 +120,8 @@ namespace YouTubeDownloader
         HintVideoUnavailable,
         HintMembersOnly,
         HintAgeRestricted,
-        HintGeoBlocked
+        HintGeoBlocked,
+        HintQualityUnavailable
     }
 
     public sealed class Sub
@@ -133,6 +142,13 @@ namespace YouTubeDownloader
         {
             { Msg.LabelUrl, "URL:" },
             { Msg.LabelFolder, "Folder:" },
+            { Msg.LabelQuality, "Quality:" },
+            { Msg.QualityBest, "Best available" },
+            { Msg.Quality1080, "1080p" },
+            { Msg.Quality720, "720p" },
+            { Msg.Quality480, "480p" },
+            { Msg.Quality360, "360p" },
+            { Msg.QualityAudio, "Audio only" },
             { Msg.BtnPaste, "Paste" },
             { Msg.BtnBrowse, "Browse…" },
             { Msg.BtnCheckUpdate, "Check yt-dlp update" },
@@ -167,6 +183,7 @@ namespace YouTubeDownloader
             { Msg.InfoPreparing, "Preparing…" },
             { Msg.InfoDownloadingFile, "Downloading: {0}" },
             { Msg.InfoMergingFile, "Merging: {0}" },
+            { Msg.InfoExtractingFile, "Extracting audio: {0}" },
 
             { Msg.ProgressComplete, "✓ DOWNLOAD COMPLETE" },
             { Msg.ProgressAlready, "✓ FILE WAS ALREADY DOWNLOADED" },
@@ -232,13 +249,21 @@ namespace YouTubeDownloader
             { Msg.HintVideoUnavailable, "The video is unavailable or removed." },
             { Msg.HintMembersOnly, "The video is available to channel members only." },
             { Msg.HintAgeRestricted, "Age restriction: signing in to an account is required." },
-            { Msg.HintGeoBlocked, "The video is blocked in your region." }
+            { Msg.HintGeoBlocked, "The video is blocked in your region." },
+            { Msg.HintQualityUnavailable, "No video at or below the selected quality is available for this video. Choose «Best available» or set a higher quality limit." }
         };
 
         private static readonly Dictionary<Msg, string> Ru = new Dictionary<Msg, string>
         {
             { Msg.LabelUrl, "Ссылка:" },
             { Msg.LabelFolder, "Папка:" },
+            { Msg.LabelQuality, "Качество:" },
+            { Msg.QualityBest, "Лучшее доступное" },
+            { Msg.Quality1080, "1080p" },
+            { Msg.Quality720, "720p" },
+            { Msg.Quality480, "480p" },
+            { Msg.Quality360, "360p" },
+            { Msg.QualityAudio, "Только аудио" },
             { Msg.BtnPaste, "Вставить" },
             { Msg.BtnBrowse, "Обзор…" },
             { Msg.BtnCheckUpdate, "Проверить обновление yt-dlp" },
@@ -273,6 +298,7 @@ namespace YouTubeDownloader
             { Msg.InfoPreparing, "Подготовка…" },
             { Msg.InfoDownloadingFile, "Скачивание: {0}" },
             { Msg.InfoMergingFile, "Склейка: {0}" },
+            { Msg.InfoExtractingFile, "Извлечение аудио: {0}" },
 
             { Msg.ProgressComplete, "✓ СКАЧИВАНИЕ ЗАВЕРШЕНО" },
             { Msg.ProgressAlready, "✓ ФАЙЛ УЖЕ БЫЛ СКАЧАН" },
@@ -338,7 +364,8 @@ namespace YouTubeDownloader
             { Msg.HintVideoUnavailable, "Видео недоступно или удалено." },
             { Msg.HintMembersOnly, "Видео доступно только участникам канала." },
             { Msg.HintAgeRestricted, "Возрастное ограничение: требуется вход в аккаунт." },
-            { Msg.HintGeoBlocked, "Видео заблокировано в вашем регионе." }
+            { Msg.HintGeoBlocked, "Видео заблокировано в вашем регионе." },
+            { Msg.HintQualityUnavailable, "Для этого ролика нет видео не выше выбранного качества. Выберите «Лучшее доступное» или увеличьте лимит качества." }
         };
 
         public static Lang Current { get; private set; }
