@@ -206,35 +206,19 @@ namespace YouTubeDownloader
                 "--encoding", "utf-8",
                 "--ignore-config",
                 "--no-playlist",
-                "--js-runtime", "deno"
+                "--js-runtime", "deno",
+                "-f", FormatSpec(mode)
             };
-            switch (mode)
+            if (mode == DownloadQuality.AudioOnly)
             {
-                case DownloadQuality.AudioOnly:
-                    args.Add("-f");
-                    args.Add("bestaudio[ext=m4a]/bestaudio/best");
-                    args.Add("-x");
-                    args.Add("--audio-format");
-                    args.Add("best");
-                    break;
-                case DownloadQuality.P1080:
-                case DownloadQuality.P720:
-                case DownloadQuality.P480:
-                case DownloadQuality.P360:
-                    int h = mode == DownloadQuality.P1080 ? 1080
-                        : mode == DownloadQuality.P720 ? 720
-                        : mode == DownloadQuality.P480 ? 480 : 360;
-                    args.Add("-f");
-                    args.Add(HeightCappedFormat(h));
-                    args.Add("--merge-output-format");
-                    args.Add("mp4");
-                    break;
-                default:
-                    args.Add("-f");
-                    args.Add("bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best");
-                    args.Add("--merge-output-format");
-                    args.Add("mp4");
-                    break;
+                args.Add("-x");
+                args.Add("--audio-format");
+                args.Add("best");
+            }
+            else
+            {
+                args.Add("--merge-output-format");
+                args.Add("mp4");
             }
             args.Add("--ffmpeg-location");
             args.Add(AppPaths.FfmpegExe);
@@ -244,11 +228,133 @@ namespace YouTubeDownloader
             return args.ToArray();
         }
 
+        public static string FormatSpec(DownloadQuality mode)
+        {
+            switch (mode)
+            {
+                case DownloadQuality.AudioOnly: return "bestaudio[ext=m4a]/bestaudio/best";
+                case DownloadQuality.P1080: return HeightCappedFormat(1080);
+                case DownloadQuality.P720: return HeightCappedFormat(720);
+                case DownloadQuality.P480: return HeightCappedFormat(480);
+                case DownloadQuality.P360: return HeightCappedFormat(360);
+                default: return "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best";
+            }
+        }
+
         private static string HeightCappedFormat(int h)
         {
             return "bestvideo[height<=" + h + "][ext=mp4]+bestaudio[ext=m4a]"
                  + "/bestvideo[height<=" + h + "]+bestaudio"
                  + "/best[height<=" + h + "]";
+        }
+
+        public static string[] TitleInfoArgs(DownloadQuality mode, string url)
+        {
+            return new[]
+            {
+                "--ignore-config", "--encoding", "utf-8", "--color", "no_color",
+                "--no-playlist",
+                "--print", "title",
+                "--print", "size=%(filesize,filesize_approx)s",
+                "-f", FormatSpec(mode),
+                url
+            };
+        }
+
+        private static string[] PlainTitleArgs(string url)
+        {
+            return new[]
+            {
+                "--ignore-config", "--encoding", "utf-8", "--color", "no_color",
+                "--no-playlist", "--print", "title", url
+            };
+        }
+
+        public static long? ParseSizeValue(string value)
+        {
+            if (value == null) return null;
+            string v = value.Trim();
+            if (v.Length == 0) return null;
+            if (string.Equals(v, "NA", StringComparison.OrdinalIgnoreCase)) return null;
+            long n;
+            if (long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out n) && n >= 0) return n;
+            return null;
+        }
+
+        public class TitleSizeInfo
+        {
+            public string Title;
+            public long? SizeBytes;
+        }
+
+        public static bool TryGetTitleAndSize(DownloadQuality mode, string url, out TitleSizeInfo info)
+        {
+            info = null;
+            string title;
+            long? size;
+            bool timedOut;
+            if (TryTitleRun(TitleInfoArgs(mode, url), out title, out size, out timedOut))
+            {
+                info = new TitleSizeInfo { Title = title, SizeBytes = size };
+                return true;
+            }
+            if (mode != DownloadQuality.BestAvailable && !timedOut)
+            {
+                if (TryTitleRun(PlainTitleArgs(url), out title, out size, out timedOut))
+                {
+                    info = new TitleSizeInfo { Title = title, SizeBytes = null };
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private static bool TryTitleRun(string[] args, out string title, out long? size, out bool timedOut)
+        {
+            title = null;
+            size = null;
+            timedOut = false;
+            try
+            {
+                using (Process p = Process.Start(BuildStartInfo(FormatArgs(args))))
+                {
+                    StringBuilder so = new StringBuilder();
+                    p.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) so.AppendLine(e.Data); };
+                    p.BeginOutputReadLine();
+                    p.BeginErrorReadLine();
+                    if (!p.WaitForExit(25000))
+                    {
+                        timedOut = true;
+                        try { p.Kill(); }
+                        catch { }
+                        return false;
+                    }
+                    try { p.WaitForExit(); }
+                    catch { }
+                    if (p.ExitCode != 0) return false;
+                    foreach (string line in so.ToString().Split('\n'))
+                    {
+                        string s = line.Trim();
+                        if (s.Length == 0) continue;
+                        if (title == null) { title = s; continue; }
+                        if (s.StartsWith("size=", StringComparison.Ordinal) && size == null)
+                            size = ParseSizeValue(s.Substring(5));
+                    }
+                    return !string.IsNullOrEmpty(title);
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        public static bool TryGetTitle(string url, out string title)
+        {
+            TitleSizeInfo info;
+            bool ok = TryGetTitleAndSize(DownloadQuality.BestAvailable, url, out info);
+            title = ok ? info.Title : null;
+            return ok;
         }
 
         public static string[] UpdateArgs()
@@ -344,48 +450,6 @@ namespace YouTubeDownloader
             {
                 exitCode = -1;
                 return "";
-            }
-        }
-
-        public static bool TryGetTitle(string url, out string title)
-        {
-            title = null;
-            try
-            {
-                using (Process p = Process.Start(BuildStartInfo(FormatArgs(new[]
-                {
-                    "--ignore-config", "--encoding", "utf-8", "--color", "no_color",
-                    "--no-playlist", "--print", "title", url
-                }))))
-                {
-                    StringBuilder so = new StringBuilder();
-                    p.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) so.AppendLine(e.Data); };
-                    p.BeginOutputReadLine();
-                    p.BeginErrorReadLine();
-                    if (!p.WaitForExit(25000))
-                    {
-                        try { p.Kill(); }
-                        catch { }
-                        return false;
-                    }
-                    try { p.WaitForExit(); }
-                    catch { }
-                    if (p.ExitCode != 0) return false;
-                    foreach (string line in so.ToString().Split('\n'))
-                    {
-                        string s = line.Trim();
-                        if (s.Length > 0)
-                        {
-                            title = s;
-                            return true;
-                        }
-                    }
-                    return false;
-                }
-            }
-            catch
-            {
-                return false;
             }
         }
 

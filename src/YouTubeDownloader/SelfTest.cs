@@ -65,6 +65,9 @@ namespace YouTubeDownloader
             TestQuoting();
             TestDownloadArgs();
             TestParseQuality();
+            TestTitleInfoArgs();
+            TestSizeParsing();
+            TestFormatSize();
             TestOutputParser();
             TestClassifier();
             TestInvalidUrlRun();
@@ -274,6 +277,75 @@ namespace YouTubeDownloader
             Check("ParseQuality значения режимов + round-trip", valuesOk && roundTrip, null);
         }
 
+        private static void TestTitleInfoArgs()
+        {
+            string url = "https://youtu.be/dQw4w9WgXcQ";
+            try
+            {
+                string[] args = YtDlpRunner.TitleInfoArgs(DownloadQuality.BestAvailable, url);
+                bool baseOk = Contains(args, "--no-playlist") && Contains(args, "--ignore-config")
+                    && AnyPair(args, "--print", "title")
+                    && AnyPair(args, "--print", "size=%(filesize,filesize_approx)s")
+                    && string.Equals(args[args.Length - 1], url, StringComparison.Ordinal);
+                Check("TitleInfoArgs base (title + size print + --no-playlist)", baseOk, null);
+
+                bool modesOk = true;
+                foreach (DownloadQuality m in new[] { DownloadQuality.BestAvailable, DownloadQuality.P1080, DownloadQuality.P720, DownloadQuality.P480, DownloadQuality.P360, DownloadQuality.AudioOnly })
+                {
+                    string[] a = YtDlpRunner.TitleInfoArgs(m, url);
+                    if (!NextIs(a, "-f", YtDlpRunner.FormatSpec(m))) { modesOk = false; break; }
+                    if (!Contains(a, "size=%(filesize,filesize_approx)s")) { modesOk = false; break; }
+                }
+                Check("TitleInfoArgs -f == FormatSpec для всех 6 режимов", modesOk, null);
+
+                string[] dlBest = YtDlpRunner.DownloadArgs("C:\\x", url, DownloadQuality.BestAvailable);
+                string[] dlAudio = YtDlpRunner.DownloadArgs("C:\\x", url, DownloadQuality.AudioOnly);
+                bool sameSpec =
+                    NextIs(dlBest, "-f", YtDlpRunner.FormatSpec(DownloadQuality.BestAvailable)) &&
+                    NextIs(dlAudio, "-f", YtDlpRunner.FormatSpec(DownloadQuality.AudioOnly)) &&
+                    FormatIs(YtDlpRunner.DownloadArgs("C:\\x", url, DownloadQuality.P1080), YtDlpRunner.FormatSpec(DownloadQuality.P1080));
+                Check("DownloadArgs и TitleInfoArgs используют единый FormatSpec", sameSpec, null);
+            }
+            catch (Exception ex)
+            {
+                Check("TitleInfoArgs", false, ex.Message);
+            }
+        }
+
+        private static void TestSizeParsing()
+        {
+            bool okValid = YtDlpRunner.ParseSizeValue("21042523") == 21042523L
+                && YtDlpRunner.ParseSizeValue(" 533067 ") == 533067L
+                && YtDlpRunner.ParseSizeValue("0") == 0L;
+
+            bool okNa = YtDlpRunner.ParseSizeValue("NA") == null
+                && YtDlpRunner.ParseSizeValue("na") == null;
+
+            bool okGarbage = YtDlpRunner.ParseSizeValue(null) == null
+                && YtDlpRunner.ParseSizeValue("") == null
+                && YtDlpRunner.ParseSizeValue("   ") == null
+                && YtDlpRunner.ParseSizeValue("12.5MB") == null
+                && YtDlpRunner.ParseSizeValue("-5") == null
+                && YtDlpRunner.ParseSizeValue("99999999999999999999") == null;
+
+            Check("ParseSizeValue валидные числа", okValid, null);
+            Check("ParseSizeValue NA/пусто/мусор → null", okNa && okGarbage, null);
+        }
+
+        private static void TestFormatSize()
+        {
+            L10n.Set(Lang.En);
+            bool en = string.Equals(L10n.FormatSize(533067), "521 KB", StringComparison.Ordinal)
+                && string.Equals(L10n.FormatSize(21042523), "20.1 MB", StringComparison.Ordinal)
+                && string.Equals(L10n.FormatSize(1610612736), "1.5 GB", StringComparison.Ordinal)
+                && string.Equals(L10n.FormatSize(512), "512 B", StringComparison.Ordinal);
+            L10n.Set(Lang.Ru);
+            bool ru = string.Equals(L10n.FormatSize(21042523), "20,1 МБ", StringComparison.Ordinal)
+                && string.Equals(L10n.FormatSize(1610612736), "1,5 ГБ", StringComparison.Ordinal);
+            L10n.Set(Lang.En);
+            Check("FormatSize B/KB/MB/GB EN+RU", en && ru, null);
+        }
+
         private static void TestOutputParser()
         {
             string ex = OutputParser.TryExtractAudioDestination("[ExtractAudio] Destination: C:\\Музыка\\Song.m4a");
@@ -313,6 +385,14 @@ namespace YouTubeDownloader
             for (int i = 0; i < args.Length - 1; i++)
                 if (string.Equals(args[i], key, StringComparison.Ordinal))
                     return string.Equals(args[i + 1], value, StringComparison.Ordinal);
+            return false;
+        }
+
+        private static bool AnyPair(string[] args, string key, string value)
+        {
+            for (int i = 0; i < args.Length - 1; i++)
+                if (string.Equals(args[i], key, StringComparison.Ordinal) && string.Equals(args[i + 1], value, StringComparison.Ordinal))
+                    return true;
             return false;
         }
 

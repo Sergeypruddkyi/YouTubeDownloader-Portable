@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 
 namespace YouTubeDownloader
 {
@@ -55,6 +56,7 @@ namespace YouTubeDownloader
         InfoDownloadingFile,
         InfoMergingFile,
         InfoExtractingFile,
+        InfoEstimatedSize,
 
         ProgressComplete,
         ProgressAlready,
@@ -184,6 +186,7 @@ namespace YouTubeDownloader
             { Msg.InfoDownloadingFile, "Downloading: {0}" },
             { Msg.InfoMergingFile, "Merging: {0}" },
             { Msg.InfoExtractingFile, "Extracting audio: {0}" },
+            { Msg.InfoEstimatedSize, "Estimated size: ~{0}" },
 
             { Msg.ProgressComplete, "✓ DOWNLOAD COMPLETE" },
             { Msg.ProgressAlready, "✓ FILE WAS ALREADY DOWNLOADED" },
@@ -299,6 +302,7 @@ namespace YouTubeDownloader
             { Msg.InfoDownloadingFile, "Скачивание: {0}" },
             { Msg.InfoMergingFile, "Склейка: {0}" },
             { Msg.InfoExtractingFile, "Извлечение аудио: {0}" },
+            { Msg.InfoEstimatedSize, "Оценочный размер: ~{0}" },
 
             { Msg.ProgressComplete, "✓ СКАЧИВАНИЕ ЗАВЕРШЕНО" },
             { Msg.ProgressAlready, "✓ ФАЙЛ УЖЕ БЫЛ СКАЧАН" },
@@ -403,6 +407,18 @@ namespace YouTubeDownloader
                 s = string.Format(s, resolved);
             }
             return s;
+        }
+
+        public static string FormatSize(long bytes)
+        {
+            bool ru = Current == Lang.Ru;
+            CultureInfo ci = ru ? new CultureInfo("ru-RU") : CultureInfo.InvariantCulture;
+            if (bytes < 1024) return bytes.ToString("0", ci) + " " + (ru ? "Б" : "B");
+            double kb = bytes / 1024.0;
+            if (kb < 1024) return kb.ToString("0", ci) + " " + (ru ? "КБ" : "KB");
+            double mb = kb / 1024.0;
+            if (mb < 1024) return mb.ToString("0.0", ci) + " " + (ru ? "МБ" : "MB");
+            return (mb / 1024.0).ToString("0.0", ci) + " " + (ru ? "ГБ" : "GB");
         }
     }
 }

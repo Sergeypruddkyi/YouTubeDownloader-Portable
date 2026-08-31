@@ -92,6 +92,7 @@ namespace YouTubeDownloader
         private string _lastAutoUrl;
         private string _titleForUrl;
         private string _titleValue;
+        private long? _titleSizeBytes;
         private int _titleSeq;
         private Process _proc;
         private volatile bool _downloading;
@@ -411,6 +412,20 @@ namespace YouTubeDownloader
             _quality = mode;
             _settings.Quality = mode;
             _settings.Save();
+            RestartTitleFetchForQuality();
+        }
+
+        private void RestartTitleFetchForQuality()
+        {
+            if (_downloading || _updateRunning) return;
+            string t = txtUrl.Text.Trim();
+            if (t.Length == 0 || !YouTubeUrl.IsValid(t)) return;
+            _titleForUrl = null;
+            _titleSizeBytes = null;
+            lblTitle.Text = L10n.T(Msg.TitleFetching);
+            lblTitle.ForeColor = Theme.Dim;
+            _titleTimer.Stop();
+            _titleTimer.Start();
         }
 
         private void OnLanguageComboChanged()
@@ -427,6 +442,7 @@ namespace YouTubeDownloader
         {
             ApplyStrings();
             UpdateUrlStatus();
+            if (_titleValue != null && _titleForUrl != null) RenderTitleLine();
             RenderYtStatus();
             RenderStatus();
             RenderInfo();
@@ -661,14 +677,16 @@ namespace YouTubeDownloader
             {
                 lblTitle.Text = L10n.T(Msg.TitleWaiting);
                 lblTitle.ForeColor = Theme.Dim;
+                _titleForUrl = null;
+                _titleValue = null;
+                _titleSizeBytes = null;
                 _titleTimer.Stop();
             }
             else if (YouTubeUrl.IsValid(t))
             {
                 if (t == _titleForUrl && _titleValue != null)
                 {
-                    lblTitle.Text = L10n.T(Msg.TitleIs, _titleValue);
-                    lblTitle.ForeColor = Theme.Light;
+                    RenderTitleLine();
                 }
                 else
                 {
@@ -682,39 +700,60 @@ namespace YouTubeDownloader
             {
                 lblTitle.Text = L10n.T(Msg.NotYouTube);
                 lblTitle.ForeColor = Theme.Orange;
+                _titleForUrl = null;
+                _titleValue = null;
+                _titleSizeBytes = null;
                 _titleTimer.Stop();
             }
+        }
+
+        private void RenderTitleLine()
+        {
+            if (_titleValue == null)
+            {
+                lblTitle.Text = L10n.T(Msg.TitleWaiting);
+                lblTitle.ForeColor = Theme.Dim;
+                return;
+            }
+            string text;
+            if (_titleSizeBytes.HasValue)
+                text = L10n.T(Msg.InfoEstimatedSize, L10n.FormatSize(_titleSizeBytes.Value)) + "  ·  " + L10n.T(Msg.TitleIs, _titleValue);
+            else
+                text = L10n.T(Msg.TitleIs, _titleValue);
+            lblTitle.Text = text;
+            lblTitle.ForeColor = Theme.Light;
         }
 
         private void TryFetchTitle(string url)
         {
             if (_downloading || _updateRunning) return;
             if (!YouTubeUrl.IsValid(url)) return;
-            if (url == _titleForUrl)
+            if (url == _titleForUrl && _titleValue != null)
             {
-                lblTitle.Text = L10n.T(Msg.TitleIs, _titleValue);
-                lblTitle.ForeColor = Theme.Light;
+                RenderTitleLine();
                 return;
             }
             int seq = ++_titleSeq;
             lblTitle.Text = L10n.T(Msg.TitleFetching);
             lblTitle.ForeColor = Theme.Dim;
+            DownloadQuality modeAtStart = _quality;
             Task.Run(delegate
             {
-                string title;
-                bool ok = YtDlpRunner.TryGetTitle(url, out title);
+                YtDlpRunner.TitleSizeInfo info;
+                bool ok = YtDlpRunner.TryGetTitleAndSize(modeAtStart, url, out info);
                 BeginInvoke((MethodInvoker)delegate
                 {
                     if (seq != _titleSeq) return;
-                    if (ok && !string.IsNullOrEmpty(title))
+                    if (ok && info != null && !string.IsNullOrEmpty(info.Title))
                     {
                         _titleForUrl = url;
-                        _titleValue = title;
-                        lblTitle.Text = L10n.T(Msg.TitleIs, title);
-                        lblTitle.ForeColor = Theme.Light;
+                        _titleValue = info.Title;
+                        _titleSizeBytes = info.SizeBytes;
+                        RenderTitleLine();
                     }
                     else
                     {
+                        _titleSizeBytes = null;
                         lblTitle.Text = L10n.T(Msg.TitleFailed);
                         lblTitle.ForeColor = Theme.Orange;
                     }
