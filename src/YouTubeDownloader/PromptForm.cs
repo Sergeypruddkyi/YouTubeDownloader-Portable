@@ -42,6 +42,10 @@ namespace YouTubeDownloader
                 btn.Click += delegate { Chosen = chosen; Close(); };
                 Controls.Add(btn);
             }
+
+            float k = ChromeApi.GetDpiForWindowAt(Cursor.Position) / 96f;
+            if (k > 0.999f && k < 1.001f) k = 1f;
+            if (k != 1f) Scale(new SizeF(k, k));
         }
 
         public static string Show(Form owner, string title, string message, bool warning, params string[] buttons)

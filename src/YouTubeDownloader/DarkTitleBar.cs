@@ -11,7 +11,27 @@ namespace YouTubeDownloader
         public static extern int GetSystemMetrics(int index);
 
         [DllImport("user32.dll")]
+        public static extern int GetDpiForWindow(IntPtr hwnd);
+
+        [DllImport("user32.dll")]
         public static extern IntPtr MonitorFromWindow(IntPtr hwnd, uint flags);
+
+        [DllImport("user32.dll")]
+        public static extern IntPtr MonitorFromPoint(ChromePoint pt, uint flags);
+
+        [DllImport("shcore.dll")]
+        public static extern int GetDpiForMonitor(IntPtr hmonitor, int dpiType, out uint dpiX, out uint dpiY);
+
+        public static int GetDpiForWindowAt(Point pt)
+        {
+            IntPtr mon = MonitorFromPoint(new ChromePoint { X = pt.X, Y = pt.Y }, MonitorDefaultToNearest);
+            if (mon != IntPtr.Zero)
+            {
+                uint dx, dy;
+                if (GetDpiForMonitor(mon, 0, out dx, out dy) == 0 && dx > 0) return (int)dx;
+            }
+            return 96;
+        }
 
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         public static extern bool GetMonitorInfo(IntPtr hMonitor, ref MonitorInfo info);
@@ -162,6 +182,7 @@ namespace YouTubeDownloader
             b.BackColor = Theme.Back;
             b.ForeColor = Theme.Light;
             b.TabStop = false;
+            b.Anchor = AnchorStyles.Top | AnchorStyles.Right;
             b.MouseEnter += delegate { if (b != _closeBtn) b.BackColor = Theme.ButtonHover; };
             b.MouseLeave += delegate { if (b != _closeBtn) b.BackColor = Theme.Back; };
             b.Click += onClick;
@@ -171,9 +192,9 @@ namespace YouTubeDownloader
         private void PositionButtons()
         {
             if (_closeBtn == null || _maxBtn == null || _minBtn == null) return;
-            _closeBtn.Location = new Point(Width - 46, 0);
-            _maxBtn.Location = new Point(Width - 92, 0);
-            _minBtn.Location = new Point(Width - 138, 0);
+            _closeBtn.Location = new Point(Width - _closeBtn.Width, 0);
+            _maxBtn.Location = new Point(_closeBtn.Left - _maxBtn.Width, 0);
+            _minBtn.Location = new Point(_maxBtn.Left - _minBtn.Width, 0);
         }
 
         private void UpdateMaxGlyph()
@@ -185,16 +206,19 @@ namespace YouTubeDownloader
         protected override void OnResize(EventArgs eventargs)
         {
             base.OnResize(eventargs);
-            PositionButtons();
             Invalidate();
         }
 
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);
-            if (_form.Icon != null) e.Graphics.DrawIcon(_form.Icon, new Rectangle(10, (BarHeight - 16) / 2, 16, 16));
+            int iconSize = Height * 16 / BarHeight;
+            int iconY = (Height - iconSize) / 2;
+            if (_form.Icon != null) e.Graphics.DrawIcon(_form.Icon, new Rectangle(10, iconY, iconSize, iconSize));
+            int textLeft = 10 + iconSize + 8;
+            int textRight = _minBtn != null ? _minBtn.Left : Width - 138;
             TextRenderer.DrawText(e.Graphics, _form.Text, Theme.Regular,
-                new Rectangle(34, 0, Width - 160, BarHeight), Theme.Light,
+                new Rectangle(textLeft, 0, Math.Max(1, textRight - textLeft), Height), Theme.Light,
                 TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
         }
 

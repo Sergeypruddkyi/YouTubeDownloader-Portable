@@ -128,6 +128,18 @@ namespace YouTubeDownloader
             StartPosition = FormStartPosition.CenterScreen;
             FormClosing += OnFormClosing;
             BuildUi();
+
+            // Масштабирование под DPI монитора выполняется ДО создания хэндла:
+            // после CreateHandle первый WM_NCCALCSIZE (borderless-chrome) искажает
+            // ClientSize, и якоря контента снимают неверные дистанции
+            _dpiScale = ChromeApi.GetDpiForWindowAt(Cursor.Position) / 96f;
+            if (_dpiScale > 0.999f && _dpiScale < 1.001f) _dpiScale = 1f;
+            if (_dpiScale != 1f)
+            {
+                Scale(new SizeF(_dpiScale, _dpiScale));
+                MinimumSize = ScaledSize(790, CollapsedHeight);
+                ClientSize = ScaledSize(790, CollapsedHeight);
+            }
         }
 
         private void BuildUi()
@@ -303,6 +315,14 @@ namespace YouTubeDownloader
             titleBar = new DarkTitleBar(this);
             Controls.Add(titleBar);
 
+            // txtLog/lblStatus заданы в expanded-координатах; снапшотим их якоря
+            // к expanded-контенту и возвращаем collapsed, иначе bottom-дистанции
+            // снимаются с collapsed-высоты и статус оказывается вне окна
+            content.Size = new Size(790, ExpandedHeight - DarkTitleBar.BarHeight);
+            txtLog.SetBounds(12, 286, 766, 196);
+            lblStatus.SetBounds(12, 487, 766, 22);
+            content.Size = new Size(790, CollapsedHeight - DarkTitleBar.BarHeight);
+
             ApplyStrings();
             SetStatus(Msg.StatusReady, Theme.Dim);
             UpdateUrlStatus();
@@ -341,13 +361,21 @@ namespace YouTubeDownloader
             RenderProgress();
         }
 
+        private float _dpiScale = 1f;
+
+        private Size ScaledSize(int width, int height)
+        {
+            return new Size((int)Math.Round(width * _dpiScale), (int)Math.Round(height * _dpiScale));
+        }
+
         private void ToggleLog()
         {
             _logVisible = !_logVisible;
             txtLog.Visible = _logVisible;
             btnLogToggle.Text = L10n.T(_logVisible ? Msg.BtnHideLog : Msg.BtnShowLog);
-            MinimumSize = _logVisible ? new Size(790, 561) : new Size(790, 368);
-            ClientSize = _logVisible ? new Size(790, ExpandedHeight) : new Size(790, CollapsedHeight);
+            Size target = ScaledSize(790, _logVisible ? ExpandedHeight : CollapsedHeight);
+            MinimumSize = target;
+            ClientSize = target;
         }
 
         protected override void OnLoad(EventArgs e)
@@ -985,6 +1013,9 @@ namespace YouTubeDownloader
         {
             base.OnShown(e);
             ApplyChromeStyles();
+            Size target = ScaledSize(790, CollapsedHeight);
+            MinimumSize = target;
+            ClientSize = target;
         }
 
         private void ApplyChromeStyles()
@@ -1044,7 +1075,7 @@ namespace YouTubeDownloader
                     if (left) { m.Result = (IntPtr)ChromeApi.HtLeft; return; }
                     if (right) { m.Result = (IntPtr)ChromeApi.HtRight; return; }
                 }
-                if (cpt.Y < DarkTitleBar.BarHeight) { m.Result = (IntPtr)ChromeApi.HtCaption; return; }
+                if (titleBar != null && cpt.Y < titleBar.Height) { m.Result = (IntPtr)ChromeApi.HtCaption; return; }
                 m.Result = (IntPtr)ChromeApi.HtClient;
                 return;
             }
