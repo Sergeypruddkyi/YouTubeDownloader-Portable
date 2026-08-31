@@ -1,2 +1,5 @@
 # User settings (created/updated by the application at runtime, kept locally)
 dist/YouTubeDownloader/settings.ini
+
+# Binaries are distributed via GitHub Releases, not tracked in Git
+*.exe
