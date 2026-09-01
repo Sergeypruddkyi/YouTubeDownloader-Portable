@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace YouTubeDownloader
@@ -319,7 +320,13 @@ namespace YouTubeDownloader
                 using (Process p = Process.Start(BuildStartInfo(FormatArgs(args))))
                 {
                     StringBuilder so = new StringBuilder();
-                    p.OutputDataReceived += delegate(object s, DataReceivedEventArgs e) { if (e.Data != null) so.AppendLine(e.Data); };
+                    PipeDrainCounter drain = new PipeDrainCounter();
+                    p.OutputDataReceived += delegate(object s, DataReceivedEventArgs e)
+                    {
+                        if (e.Data != null) { lock (so) { so.AppendLine(e.Data); } return; }
+                        drain.OnData(s, e);
+                    };
+                    p.ErrorDataReceived += drain.OnData;
                     p.BeginOutputReadLine();
                     p.BeginErrorReadLine();
                     if (!p.WaitForExit(25000))
@@ -329,10 +336,11 @@ namespace YouTubeDownloader
                         catch { }
                         return false;
                     }
-                    try { p.WaitForExit(); }
-                    catch { }
+                    drain.WaitDrained(5000);
                     if (p.ExitCode != 0) return false;
-                    foreach (string line in so.ToString().Split('\n'))
+                    string output;
+                    lock (so) { output = so.ToString(); }
+                    foreach (string line in output.Split('\n'))
                     {
                         string s = line.Trim();
                         if (s.Length == 0) continue;
@@ -346,6 +354,31 @@ namespace YouTubeDownloader
             catch
             {
                 return false;
+            }
+        }
+
+        internal sealed class PipeDrainCounter
+        {
+            private int _eofStreams;
+
+            public void OnData(object sender, DataReceivedEventArgs e)
+            {
+                if (e.Data == null) Interlocked.Increment(ref _eofStreams);
+            }
+
+            public bool Drained()
+            {
+                return Interlocked.CompareExchange(ref _eofStreams, 0, 0) == 2;
+            }
+
+            public bool WaitDrained(int timeoutMs)
+            {
+                for (int waitedMs = 0; waitedMs < timeoutMs; waitedMs += 50)
+                {
+                    if (Drained()) return true;
+                    Thread.Sleep(50);
+                }
+                return Drained();
             }
         }
 

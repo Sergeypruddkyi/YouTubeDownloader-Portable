@@ -659,11 +659,13 @@ namespace YouTubeDownloader
 
         private void ApplyAutoUrl(string url)
         {
-            if (url == txtUrl.Text.Trim())
-            {
-                UpdateUrlStatus();
-                return;
-            }
+            // Same URL already in the field: do nothing. Re-calling
+            // UpdateUrlStatus here re-armed _titleTimer on every clipboard
+            // poll, spawning a fresh title fetch whose result was discarded
+            // as stale by the next re-trigger (_titleSeq), so the UI could
+            // stay on "Fetching title…" indefinitely while yt.exe
+            // processes piled up.
+            if (url == txtUrl.Text.Trim()) return;
             txtUrl.Text = url;
             _lastAutoUrl = url;
             UpdateUrlStatus();

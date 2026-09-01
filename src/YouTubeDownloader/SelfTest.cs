@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -71,6 +72,8 @@ namespace YouTubeDownloader
             TestOutputParser();
             TestClassifier();
             TestInvalidUrlRun();
+            TestPipeDrainLifecycle();
+            TestApplyAutoUrl();
 
             if (includeNet) TestGitHub(ver);
 
@@ -476,6 +479,102 @@ namespace YouTubeDownloader
             catch (Exception ex)
             {
                 Check("Обработка ошибки yt-dlp (invalid URL, offline)", false, ex.Message);
+            }
+        }
+
+        private static void TestPipeDrainLifecycle()
+        {
+            try
+            {
+                // Reproduces the diagnosed hang shape: the direct child (cmd) exits
+                // immediately, while a grandchild (ping, spawned by start /b with
+                // inherited std handles) keeps the redirected stdout/stderr pipes
+                // open for ~15s. A parameterless WaitForExit() would block until the
+                // grandchild dies; the bounded drain wait must return earlier and
+                // keep output buffered before EOF.
+                ProcessStartInfo psi = new ProcessStartInfo();
+                psi.FileName = Path.Combine(Environment.SystemDirectory, "cmd.exe");
+                psi.Arguments = "/c start \"yd_drain\" /b ping -n 15 127.0.0.1 & echo PIPE_DRAIN_OK & exit /b 0";
+                psi.UseShellExecute = false;
+                psi.CreateNoWindow = true;
+                psi.RedirectStandardOutput = true;
+                psi.RedirectStandardError = true;
+                Stopwatch sw = Stopwatch.StartNew();
+                Process p = Process.Start(psi);
+                StringBuilder so = new StringBuilder();
+                YtDlpRunner.PipeDrainCounter drain = new YtDlpRunner.PipeDrainCounter();
+                p.OutputDataReceived += delegate(object s, DataReceivedEventArgs e)
+                {
+                    if (e.Data != null) { lock (so) { so.AppendLine(e.Data); } return; }
+                    drain.OnData(s, e);
+                };
+                p.ErrorDataReceived += drain.OnData;
+                p.BeginOutputReadLine();
+                p.BeginErrorReadLine();
+                bool exited = p.WaitForExit(25000);
+                drain.WaitDrained(5000);
+                double seconds = sw.Elapsed.TotalSeconds;
+                string text;
+                lock (so) { text = so.ToString(); }
+                bool pipeEof = drain.Drained();
+                bool markerKept = text.IndexOf("PIPE_DRAIN_OK", StringComparison.Ordinal) >= 0;
+                try { p.Dispose(); } catch { }
+                bool ok = exited && markerKept && seconds < 12.0;
+                Check("Pipe lifecycle: parent exit + живой child не блокирует", ok, string.Format("exit={0}, {1:F1}s, pipeEOF={2}, строка сохранена={3}", exited, seconds, pipeEof, markerKept));
+            }
+            catch (Exception ex)
+            {
+                Check("Pipe lifecycle: parent exit + живой child не блокирует", false, ex.Message);
+            }
+        }
+
+        private static void TestApplyAutoUrl()
+        {
+            // Regression for the clipboard re-trigger loop: PollClipboard ->
+            // ApplyAutoUrl -> UpdateUrlStatus re-armed _titleTimer on every tick
+            // even when the field already held the same URL, so a fresh title
+            // fetch was spawned roughly every 2s and every result was discarded
+            // as stale (_titleSeq) — the UI stayed on "Fetching title…" forever.
+            // Detection: in the steady state after a tick the timer is stopped;
+            // the fixed same-URL path must keep it stopped, while a changed URL
+            // must re-arm it (fetch scheduled).
+            try
+            {
+                MainForm form = new MainForm();
+                try
+                {
+                    System.Reflection.BindingFlags F = System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance;
+                    TextBox txt = (TextBox)typeof(MainForm).GetField("txtUrl", F).GetValue(form);
+                    System.Windows.Forms.Timer timer = (System.Windows.Forms.Timer)typeof(MainForm).GetField("_titleTimer", F).GetValue(form);
+                    var miApply = typeof(MainForm).GetMethod("ApplyAutoUrl", F);
+
+                    const string urlA = "https://youtu.be/dQw4w9WgXcQ";
+                    const string urlB = "https://youtu.be/BaW_jenozKc";
+
+                    // New URL: applied to the field.
+                    miApply.Invoke(form, new object[] { urlA });
+                    bool newUrlApplied = string.Equals(txt.Text, urlA, StringComparison.Ordinal);
+
+                    // Steady state after a tick: timer stopped. Same URL → no-op.
+                    timer.Stop();
+                    miApply.Invoke(form, new object[] { urlA });
+                    bool sameUrlNoRefetch = !timer.Enabled && string.Equals(txt.Text, urlA, StringComparison.Ordinal);
+
+                    // Changed URL: applied and fetch re-armed (timer started).
+                    miApply.Invoke(form, new object[] { urlB });
+                    bool changedUrlRefetch = timer.Enabled && string.Equals(txt.Text, urlB, StringComparison.Ordinal);
+
+                    Check("ApplyAutoUrl: тот же URL → no re-fetch, новый → fetch", newUrlApplied && sameUrlNoRefetch && changedUrlRefetch,
+                        "new=" + newUrlApplied + " sameNoRefetch=" + sameUrlNoRefetch + " changedRefetch=" + changedUrlRefetch);
+                }
+                finally
+                {
+                    form.Dispose();
+                }
+            }
+            catch (Exception ex)
+            {
+                Check("ApplyAutoUrl: тот же URL → no re-fetch, новый → fetch", false, ex.Message);
             }
         }
 
