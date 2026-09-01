@@ -3,7 +3,7 @@
 YouTube Downloader Portable — a simple, lightweight, portable Windows GUI for [yt-dlp](https://github.com/yt-dlp/yt-dlp).
 Download YouTube videos without using the command line.
 
-![YouTube Downloader screenshot](assets/YouTubeDownloader.png)
+![YouTube Downloader screenshot](assets/YouTubeDownloader-v1.1.png)
 
 ## Features
 
