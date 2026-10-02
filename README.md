@@ -8,11 +8,11 @@ No installer is required. The current application is built on **.NET 10** and is
 
 ### Main window
 
-![YouTube Downloader main window](assets/main-window.png)
+![YouTube Downloader main window](assets/youtubedownloader-main.png)
 
 ### Video Editor
 
-![YouTube Downloader Video Editor](assets/video-editor.png)
+![YouTube Downloader Video Editor](assets/youtubedownloader-editor.png)
 
 ## Features
 
@@ -131,3 +131,4 @@ Third-party components are distributed under their respective licenses.
 ## Repository
 
 [GitHub repository](https://github.com/Sergeypruddkyi/YouTubeDownloader-Portable)
+
