@@ -1,0 +1,122 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>disable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <AssemblyName>YouTubeDownloader</AssemblyName>
+    <RootNamespace>YouTubeDownloader</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>..\assets\YouTubeDownloader.ico</ApplicationIcon>
+    <Platforms>AnyCPU;x64</Platforms>
+
+    <!-- Assembly metadata (previously in Program.cs assembly attributes) -->
+    <Product>YouTubeDownloader-GUI</Product>
+    <AssemblyTitle>YouTubeDownloader-GUI</AssemblyTitle>
+    <Version>1.2.0</Version>
+    <InformationalVersion>1.2</InformationalVersion>
+
+    <!-- Publish defaults for portable self-contained win-x64 -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == '' and '$(Publishing)' == 'true'">win-x64</RuntimeIdentifier>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!--
+      Canonical portable output: publish writes the .NET artifacts straight into
+      dist\YouTubeDownloader (see AGENTS.md). This keeps the folder the user runs
+      in sync with the freshly built EXE/DLL and avoids the bin\publish vs dist
+      mismatch. dotnet publish does not wipe unrelated files, so the external
+      runtime sidecars (ffmpeg/ffprobe/deno/yt) and settings.ini in dist survive.
+    -->
+    <PublishDir>$(MSBuildProjectDirectory)\..\dist\YouTubeDownloader\</PublishDir>
+
+    <!--
+      Single-file portable release: the whole .NET 10 runtime is packed into
+      YouTubeDownloader.exe so it runs on a clean Windows x64 without an
+      installed .NET. External native components (libvlc tree, ffmpeg/ffprobe/
+      deno/yt) stay as separate files next to the EXE. DebugType=none: no PDB
+      is produced for the release.
+    -->
+    <PublishSingleFile>true</PublishSingleFile>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+
+    <!--
+      WFO1000: WinForms code-first project (no *.Designer.cs, no Windows Forms Designer usage).
+      Public control properties are runtime-only and never designer-serialized, so the
+      designer-serialization analyzer does not apply here.
+    -->
+    <NoWarn>$(NoWarn);WFO1000</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Embedded video player for the central preview (TASK 2 / UX contract).
+         LGPL runtime: bundled portable LibVLC native binaries, no system VLC.
+         Versions proven in TASK 1 / TASK 1.5 SPIKE. -->
+    <PackageReference Include="LibVLCSharp" Version="3.10.1" />
+    <PackageReference Include="LibVLCSharp.WinForms" Version="3.10.1" />
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
+  </ItemGroup>
+
+  <!--
+    LibVLC runtime minimization. VideoLAN.LibVLC.Windows 3.0.24 copies the full
+    runtime for ALL architectures (win-x64 + win-x86 + win-arm64, ~304 MB) and
+    the complete VLC plugin tree into the output - while the Cutter only plays
+    local MP4 (H.264 / AV1+dav1d) into a VideoView. This target prunes the
+    published tree down to the audited keep-list (see
+    .agent/libvlc-minimize/audit.md and tools/Prune-LibVlc.ps1); without it the
+    next publish would bring win-x86 / win-arm64 and all plugins back.
+  -->
+  <Target Name="PruneLibVlcRuntime" AfterTargets="Publish">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\..\tools\Prune-LibVlc.ps1&quot; -LibVlcDir &quot;$(PublishDir)libvlc&quot;" />
+  </Target>
+
+  <!--
+    Single-file bundling guard: the libvlc tree is a publish payload of
+    VideoLAN.LibVLC.Windows, and IncludeNativeLibrariesForSelfExtract would
+    otherwise pack the whole runtime (all plugin DLLs) INSIDE the EXE bundle,
+    where LibVLC cannot find its plugins. The libvlc files are pulled OUT of
+    ResolvedFileToPublish and re-added with ExcludeFromSingleFile=true, so the
+    bundle composer skips them and they stay as real files next to the EXE.
+    Identity of ResolvedFileToPublish entries is the source file in the build
+    output, so the candidates are matched from $(OutDir)libvlc. RelativePath
+    (the metadata _CopyResolvedFilesToPublishPreserveNewest copies by) is
+    rebuilt from RecursiveDir.
+  -->
+  <!--
+    Single-file bundling guard: the libvlc tree is published from the
+    VideoLAN.LibVLC.Windows package with RelativePath metadata (source files
+    live inside the NuGet package, so they cannot be matched by path), and
+    IncludeNativeLibrariesForSelfExtract would otherwise pack the whole runtime
+    (all plugin DLLs) INSIDE the EXE bundle, where LibVLC cannot find its
+    plugins. This target pulls the libvlc entries out of the bundle composer:
+    pairs of Identity|RelativePath are dumped to a temp file, filtered by
+    PowerShell (MSBuild conditions have no substring operator), removed from
+    ResolvedFileToPublish (so GenerateSingleFileBundle skips them) and copied
+    next to the EXE explicitly. Must run before _ComputeFilesToBundle.
+  -->
+  <Target Name="KeepLibVlcOutOfSingleFileBundle" BeforeTargets="_ComputeFilesToBundle">
+    <PropertyGroup>
+      <_LibVlcPairFile>$(BaseIntermediateOutputPath)libvlc_publish_pairs.txt</_LibVlcPairFile>
+      <_LibVlcIdsFile>$(BaseIntermediateOutputPath)libvlc_publish_ids.txt</_LibVlcIdsFile>
+      <_LibVlcRelsFile>$(BaseIntermediateOutputPath)libvlc_publish_rels.txt</_LibVlcRelsFile>
+    </PropertyGroup>
+    <WriteLinesToFile File="$(_LibVlcPairFile)" Lines="@(ResolvedFileToPublish->'%(Identity)|%(RelativePath)')" Overwrite="true" Encoding="UTF-8" />
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$f = Get-Content -LiteralPath '$(_LibVlcPairFile)' | Where-Object { $_ -like '*|libvlc\*' }; $f | ForEach-Object { ($_ -split '\|', 2)[0] } | Set-Content -LiteralPath '$(_LibVlcIdsFile)'; $f | ForEach-Object { ($_ -split '\|', 2)[1] } | Set-Content -LiteralPath '$(_LibVlcRelsFile)'&quot;" />
+    <ReadLinesFromFile File="$(_LibVlcIdsFile)">
+      <Output TaskParameter="Lines" ItemName="_LibVlcIds" />
+    </ReadLinesFromFile>
+    <ReadLinesFromFile File="$(_LibVlcRelsFile)">
+      <Output TaskParameter="Lines" ItemName="_LibVlcRels" />
+    </ReadLinesFromFile>
+    <Message Importance="high" Text="GUARD: libvlc publish files excluded from bundle: @(_LibVlcIds->Count())" />
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(_LibVlcIds)" />
+    </ItemGroup>
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -Command &quot;$ids = Get-Content -LiteralPath '$(_LibVlcIdsFile)'; $rels = Get-Content -LiteralPath '$(_LibVlcRelsFile)'; $pub = '$(PublishDir)'; for ($i = 0; $i -lt $ids.Count; $i++) { $dst = Join-Path $pub $rels[$i]; $dir = Split-Path -Parent $dst; if (-not (Test-Path -LiteralPath $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }; Copy-Item -LiteralPath $ids[$i] -Destination $dst -Force }&quot;" />
+  </Target>
+
+</Project>
