@@ -1,0 +1,50 @@
+# YouTubeDownloader-Net10 — Windows-only Git exclusions
+
+# .NET build output
+[Bb]in/
+[Oo]bj/
+.vs/
+dist/
+release/stage/
+
+# Release archives and generated checksums
+release/*.zip
+release/*.7z
+release/*.rar
+release/*.sha256
+
+# Local agent workspace, backups and experiments
+.agent/
+.kilo/
+.workbuddy-ai/
+spike/
+_research_tmp/
+_tmp/
+
+# Local test media
+Test.mp4
+TestAV1.mp4
+TestH264.mp4
+
+# Local settings and generated test output
+settings.ini
+settings.local.ini
+selftest_result.txt
+editor_output.txt
+*.log
+*.binlog
+msbuild.err
+msbuild.wrn
+
+# Visual Studio / Windows user-specific files
+*.user
+*.suo
+*.userprefs
+*.csproj.user
+*.sln.docstates
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+tools/storm_repro.ps1
