@@ -511,7 +511,7 @@ namespace YouTubeDownloader
             int bad = 0;
             bad += Expect("Unable to extract", "ERROR: [youtube] dQw4w9WgXcQ: Unable to extract uploader id", ErrorCategory.UpdateSuspect) ? 0 : 1;
             bad += Expect("nsig failed", "WARNING: nsig extraction failed: some formats may be missing", ErrorCategory.UpdateSuspect) ? 0 : 1;
-            bad += Expect("bot check", "ERROR: Sign in to confirm you're not a bot.", ErrorCategory.UpdateSuspect) ? 0 : 1;
+            bad += Expect("bot check", "ERROR: Sign in to confirm you're not a bot.", ErrorCategory.BotCheck) ? 0 : 1;
             bad += Expect("format", "ERROR: Requested format is not available", ErrorCategory.UpdateSuspect) ? 0 : 1;
             bad += Expect("403", "ERROR: HTTP Error 403: Forbidden", ErrorCategory.UpdateSuspect) ? 0 : 1;
             bad += Expect("invalid url", "ERROR: 'xyz' is not a valid URL.", ErrorCategory.InvalidUrl) ? 0 : 1;

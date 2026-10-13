@@ -54,6 +54,11 @@ namespace YouTubeDownloader
         private VideoView _videoView;
         private LibVlcPreview _libVlc;
         private volatile bool _seekFromPlayer;
+        // DIAGNOSTICS: stale PositionChanged hypothesis tracking
+        private long _userSeekSeq = 0;  // unique sequence number for each user seek
+        private long _lastUserSeekSeq = -1;  // last user seek that was sent
+        private double _lastUserSeekTarget = -1.0;  // target position of last user seek
+        private long _lastUserSeekTimeMs = -1;  // timestamp when last user seek was sent
         private FilmstripTimeline _filmstrip;
         private Label _lblInfo;
         private Label _lblStatus;
@@ -419,7 +424,18 @@ namespace YouTubeDownloader
                 _seekFromPlayer = false;
                 return;
             }
-            _libVlc.Seek(_filmstrip.Position);
+            // DIAGNOSTICS: record user seek details
+            _userSeekSeq++;
+            _lastUserSeekSeq = _userSeekSeq;
+            _lastUserSeekTarget = _filmstrip.Position;
+            _lastUserSeekTimeMs = Environment.TickCount;
+            double currentPlayhead = _filmstrip.Position;
+            VlcDiag.Write(VlcDiag.NextSeq() + " USER_SEEK seq=" + _userSeekSeq
+                + " target=" + _lastUserSeekTarget.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                + " currentPlayhead=" + currentPlayhead.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                + " timeMs=" + _lastUserSeekTimeMs
+                + " st=" + _libVlc.StateText);
+            _libVlc.Seek(_filmstrip.Position, _userSeekSeq);
         }
 
         // Play/Pause transport. Play always starts from the current playhead;
@@ -445,10 +461,59 @@ namespace YouTubeDownloader
         private void OnLibVlcPlayingPosition(double sec)
         {
             if (_filmstrip == null || _media == null) return;
+
+            // DIAGNOSTICS: capture state BEFORE changing playhead
+            double playheadBefore = _filmstrip.Position;
+            long eventTimeMs = Environment.TickCount;
+            long timeSinceLastUserSeek = _lastUserSeekTimeMs >= 0 ? (eventTimeMs - _lastUserSeekTimeMs) : -1;
+            string stateText = _libVlc != null ? _libVlc.StateText : "null";
+            bool isPlaying = _libVlc != null && _libVlc.IsPlaying;
+            long libVlcAppliedSeq = _libVlc != null ? _libVlc.LastAppliedUserSeekSeq : -1;
+
+            VlcDiag.Write(VlcDiag.NextSeq() + " POSITION_EVENT"
+                + " eventSec=" + sec.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                + " playheadBefore=" + playheadBefore.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                + " lastUserSeekSeq=" + _lastUserSeekSeq
+                + " libVlcAppliedSeq=" + libVlcAppliedSeq
+                + " lastUserSeekTarget=" + (_lastUserSeekTarget >= 0 ? _lastUserSeekTarget.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture) : "none")
+                + " timeSinceUserSeekMs=" + timeSinceLastUserSeek
+                + " st=" + stateText
+                + " isPlaying=" + isPlaying
+                + " eventTimeMs=" + eventTimeMs);
+
+            // DIAGNOSTICS: detect stale PositionChanged
+            // HYPOTHESIS: PositionChanged events arrive out of order
+            // If libVlcAppliedSeq < lastUserSeekSeq, this event is for an OLDER seek
+            if (_lastUserSeekSeq >= 0 && libVlcAppliedSeq >= 0 && libVlcAppliedSeq < _lastUserSeekSeq)
+            {
+                VlcDiag.Write(VlcDiag.NextSeq() + " *** STALE_POSITION_CONFIRMED ***"
+                    + " eventSec=" + sec.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                    + " libVlcAppliedSeq=" + libVlcAppliedSeq
+                    + " lastUserSeekSeq=" + _lastUserSeekSeq
+                    + " seqDelta=" + (_lastUserSeekSeq - libVlcAppliedSeq)
+                    + " lastUserSeekTarget=" + _lastUserSeekTarget.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                    + " timeSinceUserSeekMs=" + timeSinceLastUserSeek);
+            }
+            // Also check position mismatch as secondary indicator
+            else if (_lastUserSeekSeq >= 0 && _lastUserSeekTarget >= 0)
+            {
+                double delta = Math.Abs(sec - _lastUserSeekTarget);
+                if (delta > 1.0)  // more than 1 second off from expected position
+                {
+                    VlcDiag.Write(VlcDiag.NextSeq() + " STALE_POSITION_SUSPECTED (position mismatch)"
+                        + " eventSec=" + sec.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                        + " expectedTarget=" + _lastUserSeekTarget.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                        + " delta=" + delta.ToString("0.000", System.Globalization.CultureInfo.InvariantCulture)
+                        + " lastUserSeekSeq=" + _lastUserSeekSeq
+                        + " libVlcAppliedSeq=" + libVlcAppliedSeq
+                        + " timeSinceUserSeekMs=" + timeSinceLastUserSeek);
+                }
+            }
+
             // TEMPORARY DIAGNOSTICS: while PAUSED every player position event yanks
             // the playhead to the DECODED position - legal after a seek (decode
             // snapped to a frame boundary), fatal if it lands on an older seek.
-            if (!_libVlc.IsPlaying)
+            if (!isPlaying)
             {
                 double was = _filmstrip.Position;
                 if (Math.Abs(was - sec) > 0.25)

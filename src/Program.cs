@@ -1,4 +1,5 @@
 using System;
+using System.Threading;
 using System.Windows.Forms;
 
 namespace YouTubeDownloader
@@ -136,9 +137,17 @@ namespace YouTubeDownloader
                 }
             }
 
-            Application.EnableVisualStyles();
-            Application.SetCompatibleTextRenderingDefault(false);
-            Application.Run(new MainForm());
+            // Single instance: named Mutex acquired before the main window is
+            // created. A second copy exits normally without a window or tasks.
+            bool createdNew;
+            using (Mutex singleInstance = new Mutex(false, "YouTubeDownloader_SingleInstance", out createdNew))
+            {
+                if (!createdNew) return;
+
+                Application.EnableVisualStyles();
+                Application.SetCompatibleTextRenderingDefault(false);
+                Application.Run(new MainForm());
+            }
         }
     }
 }

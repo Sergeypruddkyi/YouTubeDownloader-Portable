@@ -11,6 +11,7 @@ namespace YouTubeDownloader
         InvalidUrl,
         ContentUnavailable,
         PathError,
+        BotCheck,
         Unknown
     }
 
@@ -50,6 +51,8 @@ namespace YouTubeDownloader
                 Msg.HintNsigFail),
             new Rule(@"Requested format is not available", ErrorCategory.UpdateSuspect,
                 Msg.HintFormatUnavailable),
+            new Rule(@"not\s+a\s+(?:bot|robot)", ErrorCategory.BotCheck,
+                Msg.StatusBotRetry),
             new Rule(@"Sign in to confirm you.re not a bot", ErrorCategory.UpdateSuspect,
                 Msg.HintBotCheck),
             new Rule(@"Precondition check failed|HTTP Error 403", ErrorCategory.UpdateSuspect,

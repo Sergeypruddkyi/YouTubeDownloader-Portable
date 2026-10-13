@@ -52,6 +52,9 @@ namespace YouTubeDownloader
         StatusCanceled,
         StatusDone,
         StatusStopping,
+        StatusDownloadWait,
+        StatusBotRetry,
+        StatusReadyNext,
 
         InfoPreparing,
         InfoDownloadingFile,
@@ -237,6 +240,9 @@ namespace YouTubeDownloader
             { Msg.StatusCanceled, "Download canceled by the user." },
             { Msg.StatusDone, "Done: {0}" },
             { Msg.StatusStopping, "Stopping…" },
+            { Msg.StatusDownloadWait, "Please wait {0} s before the next download." },
+            { Msg.StatusBotRetry, "YouTube temporarily rejected the request. Wait 30 seconds, then click Download again" },
+            { Msg.StatusReadyNext, "Ready for the next download." },
 
             { Msg.InfoPreparing, "Preparing…" },
             { Msg.InfoDownloadingFile, "Downloading: {0}" },
@@ -408,6 +414,9 @@ namespace YouTubeDownloader
             { Msg.StatusCanceled, "Скачивание отменено пользователем." },
             { Msg.StatusDone, "Готово: {0}" },
             { Msg.StatusStopping, "Остановка…" },
+            { Msg.StatusDownloadWait, "Подождите {0} c перед следующей загрузкой." },
+            { Msg.StatusBotRetry, "YouTube временно отклонил запрос. Подождите 30 секунд, затем нажмите Download ещё раз" },
+            { Msg.StatusReadyNext, "Готово к следующей загрузке." },
 
             { Msg.InfoPreparing, "Подготовка…" },
             { Msg.InfoDownloadingFile, "Скачивание: {0}" },

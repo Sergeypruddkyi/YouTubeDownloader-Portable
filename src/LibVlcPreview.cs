@@ -44,6 +44,9 @@ namespace YouTubeDownloader
         // intermediate ones are dropped so no queue of stale positions exists.
         private long _pendingSeekMs = -1;
         private bool _seekPending;
+        // DIAGNOSTICS: track user seek sequence to detect stale PositionChanged events
+        private long _pendingUserSeekSeq = -1;
+        private long _lastAppliedUserSeekSeq = -1;
         // While the reopened/still-opening media has no live input yet, the seek
         // timer defers instead of letting libvlc drop the Time set silently;
         // the deferral is bounded by this deadline (Environment.TickCount ms).
@@ -120,6 +123,12 @@ namespace YouTubeDownloader
         public int SeekableState
         {
             get { try { return _player != null && _player.IsSeekable ? 1 : 0; } catch { return -1; } }
+        }
+
+        // DIAGNOSTICS: last applied user seek sequence number
+        public long LastAppliedUserSeekSeq
+        {
+            get { return _lastAppliedUserSeekSeq; }
         }
 
         // ------------------------------------------------------------------
@@ -381,7 +390,7 @@ namespace YouTubeDownloader
 
         // Latest-wins seek: records the newest requested time, drops any earlier
         // pending one, and lets the timer apply only the final value.
-        public void Seek(double positionSec)
+        public void Seek(double positionSec, long userSeekSeq = -1)
         {
             if (!_initialized || _disposed || _player == null) return;
             long newPending = (long)(positionSec * 1000.0);
@@ -391,12 +400,15 @@ namespace YouTubeDownloader
             // latest-wins is discarding).
             try
             {
-                VlcDiag.Write(VlcDiag.NextSeq() + " REQ t=" + newPending + " drop=" + (_seekPending ? _pendingSeekMs.ToString() : "none")
+                VlcDiag.Write(VlcDiag.NextSeq() + " REQ t=" + newPending
+                    + " userSeekSeq=" + userSeekSeq
+                    + " drop=" + (_seekPending ? _pendingSeekMs.ToString() : "none")
                     + " st=" + _player.State + " time=" + _player.Time + " vout=" + _player.VoutCount
                     + " skbl=" + (_player.IsSeekable ? 1 : 0));
             }
             catch { }
             _pendingSeekMs = newPending;
+            _pendingUserSeekSeq = userSeekSeq;
             _seekPending = true;
             _seekRetryDeadlineMs = Environment.TickCount + 4000;
             _seekTimer.Stop();
@@ -455,12 +467,17 @@ namespace YouTubeDownloader
                     return;
                 }
                 long target = _pendingSeekMs;
+                long userSeq = _pendingUserSeekSeq;
                 _seekPending = false;
                 _pendingSeekMs = -1;
+                _pendingUserSeekSeq = -1;
+                _lastAppliedUserSeekSeq = userSeq;
                 long before = _player.Time;
                 _player.Time = target;
                 long after = _player.Time;
-                VlcDiag.Write(VlcDiag.NextSeq() + " APPLY t=" + target + " timeBefore=" + before + " timeAfter=" + after
+                VlcDiag.Write(VlcDiag.NextSeq() + " APPLY t=" + target
+                    + " userSeekSeq=" + userSeq
+                    + " timeBefore=" + before + " timeAfter=" + after
                     + " st=" + _player.State + " vout=" + _player.VoutCount + " skbl=" + (_player.IsSeekable ? 1 : 0));
                 ArmAckWindow(target);
             }

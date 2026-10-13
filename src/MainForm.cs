@@ -99,6 +99,9 @@ namespace YouTubeDownloader
         private object _titleProcSync = new object();
         private Process _proc;
         private volatile bool _downloading;
+        private const int DownloadStartIntervalSeconds = 10;
+        private DateTime _lastDownloadCompletedUtc = DateTime.MinValue;
+        private readonly Timer _readyTimer = new Timer();
         private volatile bool _updateRunning;
         private bool _canceled;
         private bool _autoRetried;
@@ -137,6 +140,12 @@ namespace YouTubeDownloader
             StartPosition = FormStartPosition.CenterScreen;
             FormClosing += OnFormClosing;
             BuildUi();
+
+            // One-shot timer for the post-download wait message: when the
+            // 10-second interval expires it replaces the yellow warning with a
+            // neutral "ready" status — but never a newer status (error,
+            // bot-check, active download), see OnReadyTimerTick.
+            _readyTimer.Tick += OnReadyTimerTick;
 
             // Масштабирование под DPI монитора выполняется ДО создания хэндла:
             // после CreateHandle первый WM_NCCALCSIZE (borderless-chrome) искажает
@@ -923,9 +932,45 @@ namespace YouTubeDownloader
             catch { }
         }
 
+        // Yellow wait message + one-shot timer that swaps it for a neutral
+        // "ready" status when the interval expires. No countdown is shown.
+        private void ShowWaitStatus(double elapsedSeconds)
+        {
+            int remain = (int)Math.Ceiling(DownloadStartIntervalSeconds - elapsedSeconds);
+            SetStatus(Msg.StatusDownloadWait, Theme.Orange, remain);
+            double ms = (DownloadStartIntervalSeconds - elapsedSeconds) * 1000.0 + 150.0;
+            if (ms < 50) ms = 50;
+            _readyTimer.Stop();
+            _readyTimer.Interval = (int)ms;
+            _readyTimer.Start();
+        }
+
+        private void OnReadyTimerTick(object sender, EventArgs e)
+        {
+            _readyTimer.Stop();
+            // A delayed tick must never overwrite a newer status: an active
+            // download, an error or the bot-check message all win over it.
+            if (_downloading || _updateRunning) return;
+            if (_statusKey != Msg.StatusDownloadWait) return;
+            SetStatus(Msg.StatusReadyNext, Theme.Dim);
+        }
+
         private async Task StartDownloadAsync()
         {
             if (_downloading || _updateRunning) return;
+
+            // Minimum interval between downloads, counted from the COMPLETION of
+            // the previous download (success, error or cancel). Blocked clicks
+            // do not refresh it; queued retries are not allowed.
+            if (_lastDownloadCompletedUtc != DateTime.MinValue)
+            {
+                double elapsed = (DateTime.UtcNow - _lastDownloadCompletedUtc).TotalSeconds;
+                if (elapsed < DownloadStartIntervalSeconds)
+                {
+                    ShowWaitStatus(elapsed);
+                    return;
+                }
+            }
 
             string url = txtUrl.Text.Trim();
             if (url.Length == 0)
@@ -976,6 +1021,10 @@ namespace YouTubeDownloader
         private async Task RunDownloadCoreAsync(string[] args, bool allowUpdateFlow, DownloadQuality mode)
         {
             _downloading = true;
+            // Drop any pending wait warning immediately and show the actual
+            // download status instead (the delayed tick is disarmed above).
+            _readyTimer.Stop();
+            if (_statusKey == Msg.StatusDownloadWait) SetStatus(Msg.PhaseDownloading, Theme.Dim);
             _canceled = false;
             _alreadyDownloaded = false;
             _currentFile = null;
@@ -1001,6 +1050,7 @@ namespace YouTubeDownloader
             }
             catch (Exception ex)
             {
+                _lastDownloadCompletedUtc = DateTime.UtcNow;
                 _downloading = false;
                 _proc = null;
                 SetBusy();
@@ -1009,6 +1059,7 @@ namespace YouTubeDownloader
                 return;
             }
 
+            _lastDownloadCompletedUtc = DateTime.UtcNow;
             _downloading = false;
             _proc = null;
             SetBusy();
@@ -1060,6 +1111,14 @@ namespace YouTubeDownloader
             {
                 shortMsg = L10n.T(Msg.ErrorUnknownYt, _lastExitCode);
                 shortArg = new Sub(Msg.ErrorUnknownYt, _lastExitCode);
+            }
+
+            if (cls != null && cls.Category == ErrorCategory.BotCheck)
+            {
+                // YouTube bot-check ("not a robot"): clear wait-and-retry message,
+                // no version/update prompt. URL, folder and quality stay as entered.
+                SetStatus(Msg.StatusBotRetry, Theme.Orange);
+                return;
             }
 
             string detail = cls != null && cls.MatchedLine != null ? cls.MatchedLine : null;
